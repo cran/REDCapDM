@@ -1,0 +1,2082 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>REDCapDM</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+<script>$(document).ready(function(){
+    if (typeof $('[data-toggle="tooltip"]').tooltip === 'function') {
+        $('[data-toggle="tooltip"]').tooltip();
+    }
+    if ($('[data-toggle="popover"]').popover === 'function') {
+        $('[data-toggle="popover"]').popover();
+    }
+});
+</script>
+<style type="text/css">
+.lightable-minimal {
+border-collapse: separate;
+border-spacing: 16px 1px;
+width: 100%;
+margin-bottom: 10px;
+}
+.lightable-minimal td {
+margin-left: 5px;
+margin-right: 5px;
+}
+.lightable-minimal th {
+margin-left: 5px;
+margin-right: 5px;
+}
+.lightable-minimal thead tr:last-child th {
+border-bottom: 2px solid #00000050;
+empty-cells: hide;
+}
+.lightable-minimal tbody tr:first-child td {
+padding-top: 0.5em;
+}
+.lightable-minimal.lightable-hover tbody tr:hover {
+background-color: #f5f5f5;
+}
+.lightable-minimal.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-classic {
+border-top: 0.16em solid #111111;
+border-bottom: 0.16em solid #111111;
+width: 100%;
+margin-bottom: 10px;
+margin: 10px 5px;
+}
+.lightable-classic tfoot tr td {
+border: 0;
+}
+.lightable-classic tfoot tr:first-child td {
+border-top: 0.14em solid #111111;
+}
+.lightable-classic caption {
+color: #222222;
+}
+.lightable-classic td {
+padding-left: 5px;
+padding-right: 5px;
+color: #222222;
+}
+.lightable-classic th {
+padding-left: 5px;
+padding-right: 5px;
+font-weight: normal;
+color: #222222;
+}
+.lightable-classic thead tr:last-child th {
+border-bottom: 0.10em solid #111111;
+}
+.lightable-classic.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-classic.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-classic-2 {
+border-top: 3px double #111111;
+border-bottom: 3px double #111111;
+width: 100%;
+margin-bottom: 10px;
+}
+.lightable-classic-2 tfoot tr td {
+border: 0;
+}
+.lightable-classic-2 tfoot tr:first-child td {
+border-top: 3px double #111111;
+}
+.lightable-classic-2 caption {
+color: #222222;
+}
+.lightable-classic-2 td {
+padding-left: 5px;
+padding-right: 5px;
+color: #222222;
+}
+.lightable-classic-2 th {
+padding-left: 5px;
+padding-right: 5px;
+font-weight: normal;
+color: #222222;
+}
+.lightable-classic-2 tbody tr:last-child td {
+border-bottom: 3px double #111111;
+}
+.lightable-classic-2 thead tr:last-child th {
+border-bottom: 1px solid #111111;
+}
+.lightable-classic-2.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-classic-2.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-material {
+min-width: 100%;
+white-space: nowrap;
+table-layout: fixed;
+font-family: Roboto, sans-serif;
+border: 1px solid #EEE;
+border-collapse: collapse;
+margin-bottom: 10px;
+}
+.lightable-material tfoot tr td {
+border: 0;
+}
+.lightable-material tfoot tr:first-child td {
+border-top: 1px solid #EEE;
+}
+.lightable-material th {
+height: 56px;
+padding-left: 16px;
+padding-right: 16px;
+}
+.lightable-material td {
+height: 52px;
+padding-left: 16px;
+padding-right: 16px;
+border-top: 1px solid #eeeeee;
+}
+.lightable-material.lightable-hover tbody tr:hover {
+background-color: #f5f5f5;
+}
+.lightable-material.lightable-striped tbody tr:nth-child(even) {
+background-color: #f5f5f5;
+}
+.lightable-material.lightable-striped tbody td {
+border: 0;
+}
+.lightable-material.lightable-striped thead tr:last-child th {
+border-bottom: 1px solid #ddd;
+}
+.lightable-material-dark {
+min-width: 100%;
+white-space: nowrap;
+table-layout: fixed;
+font-family: Roboto, sans-serif;
+border: 1px solid #FFFFFF12;
+border-collapse: collapse;
+margin-bottom: 10px;
+background-color: #363640;
+}
+.lightable-material-dark tfoot tr td {
+border: 0;
+}
+.lightable-material-dark tfoot tr:first-child td {
+border-top: 1px solid #FFFFFF12;
+}
+.lightable-material-dark th {
+height: 56px;
+padding-left: 16px;
+padding-right: 16px;
+color: #FFFFFF60;
+}
+.lightable-material-dark td {
+height: 52px;
+padding-left: 16px;
+padding-right: 16px;
+color: #FFFFFF;
+border-top: 1px solid #FFFFFF12;
+}
+.lightable-material-dark.lightable-hover tbody tr:hover {
+background-color: #FFFFFF12;
+}
+.lightable-material-dark.lightable-striped tbody tr:nth-child(even) {
+background-color: #FFFFFF12;
+}
+.lightable-material-dark.lightable-striped tbody td {
+border: 0;
+}
+.lightable-material-dark.lightable-striped thead tr:last-child th {
+border-bottom: 1px solid #FFFFFF12;
+}
+.lightable-paper {
+width: 100%;
+margin-bottom: 10px;
+color: #444;
+}
+.lightable-paper tfoot tr td {
+border: 0;
+}
+.lightable-paper tfoot tr:first-child td {
+border-top: 1px solid #00000020;
+}
+.lightable-paper thead tr:last-child th {
+color: #666;
+vertical-align: bottom;
+border-bottom: 1px solid #00000020;
+line-height: 1.15em;
+padding: 10px 5px;
+}
+.lightable-paper td {
+vertical-align: middle;
+border-bottom: 1px solid #00000010;
+line-height: 1.15em;
+padding: 7px 5px;
+}
+.lightable-paper.lightable-hover tbody tr:hover {
+background-color: #F9EEC1;
+}
+.lightable-paper.lightable-striped tbody tr:nth-child(even) {
+background-color: #00000008;
+}
+.lightable-paper.lightable-striped tbody td {
+border: 0;
+}
+</style>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">REDCapDM</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#introduction" id="toc-introduction"><span class="toc-section-number">1</span>
+<strong>Introduction</strong></a></li>
+<li><a href="#functions" id="toc-functions"><span class="toc-section-number">2</span> <strong>Functions</strong></a></li>
+<li><a href="#examples" id="toc-examples"><span class="toc-section-number">3</span> <strong>Examples</strong></a>
+<ul>
+<li><a href="#redcap_data" id="toc-redcap_data"><span class="toc-section-number">3.1</span>
+<strong>redcap_data</strong></a></li>
+<li><a href="#rd_transform" id="toc-rd_transform"><span class="toc-section-number">3.2</span> <strong>rd_transform</strong></a>
+<ul>
+<li><a href="#raw-data-transformation" id="toc-raw-data-transformation"><span class="toc-section-number">3.2.1</span> <em>Raw data
+transformation</em></a></li>
+<li><a href="#data-transformation-and-classification-by-event" id="toc-data-transformation-and-classification-by-event"><span class="toc-section-number">3.2.2</span> <em>Data transformation and
+classification by event</em></a></li>
+<li><a href="#data-transformation-and-classification-by-form" id="toc-data-transformation-and-classification-by-form"><span class="toc-section-number">3.2.3</span> <em>Data transformation and
+classification by form</em></a></li>
+<li><a href="#additional-arguments" id="toc-additional-arguments"><span class="toc-section-number">3.2.4</span> <em>Additional
+arguments</em></a></li>
+</ul></li>
+<li><a href="#rd_rlogic" id="toc-rd_rlogic"><span class="toc-section-number">3.3</span>
+<strong>rd_rlogic</strong></a></li>
+<li><a href="#rd_insert_na" id="toc-rd_insert_na"><span class="toc-section-number">3.4</span>
+<strong>rd_insert_na</strong></a></li>
+<li><a href="#rd_query" id="toc-rd_query"><span class="toc-section-number">3.5</span> <strong>rd_query</strong></a>
+<ul>
+<li><a href="#output" id="toc-output"><span class="toc-section-number">3.5.1</span> <em>Output</em></a></li>
+<li><a href="#missings" id="toc-missings"><span class="toc-section-number">3.5.2</span> <em>Missings</em></a></li>
+<li><a href="#missings-in-a-branching-logic" id="toc-missings-in-a-branching-logic"><span class="toc-section-number">3.5.3</span> <em>Missings in a branching
+logic</em></a></li>
+<li><a href="#expresiones" id="toc-expresiones"><span class="toc-section-number">3.5.4</span> <em>Expresiones</em></a></li>
+<li><a href="#special-cases" id="toc-special-cases"><span class="toc-section-number">3.5.5</span> <em>Special cases</em></a></li>
+<li><a href="#additional-arguments-1" id="toc-additional-arguments-1"><span class="toc-section-number">3.5.6</span> <em>Additional
+arguments</em></a></li>
+</ul></li>
+<li><a href="#rd_event" id="toc-rd_event"><span class="toc-section-number">3.6</span> <strong>rd_event</strong></a></li>
+<li><a href="#check_queries" id="toc-check_queries"><span class="toc-section-number">3.7</span>
+<strong>check_queries</strong></a></li>
+</ul></li>
+</ul>
+</div>
+
+<p><br> <br></p>
+<div id="introduction" class="section level1" number="1">
+<h1><span class="header-section-number">1</span>
+<strong>Introduction</strong></h1>
+<p>The REDCapDM package will first allow us to read both data exported
+directly from REDCap and through an API connection. Next, it will allow
+us to create reports of queries such as outliers or missing values, and
+to track them. Finally, we will be able to preprocess previously
+downloaded data.</p>
+<p><br> <br></p>
+</div>
+<div id="functions" class="section level1" number="2">
+<h1><span class="header-section-number">2</span>
+<strong>Functions</strong></h1>
+<p>Functions included in the package:</p>
+<ul>
+<li><p><u>redcap_data</u>: read data.</p></li>
+<li><p><u>rd_query</u>: identification of queries.</p></li>
+<li><p><u>rd_event</u>: identification of events that are
+‘missing’.</p></li>
+<li><p><u>check_queries</u>: control queries.</p></li>
+<li><p><u>rd_transform</u>: data pre-processing.</p></li>
+<li><p><u>rd_rlogic</u>: transformation of REDCap logic into R
+logic.</p></li>
+<li><p><u>rd_insert_na</u>: manual entry of a ‘missing’ in specific
+variables using a filter.</p></li>
+</ul>
+<p><br> <br></p>
+</div>
+<div id="examples" class="section level1" number="3">
+<h1><span class="header-section-number">3</span>
+<strong>Examples</strong></h1>
+<div id="redcap_data" class="section level2" number="3.1">
+<h2><span class="header-section-number">3.1</span>
+<strong>redcap_data</strong></h2>
+<p>Exported data from REDCap:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">redcap_data</span>(<span class="at">data_path=</span><span class="st">&quot;C:/Users/username/example.r&quot;</span>,</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>                     <span class="at">dic_path=</span><span class="st">&quot;C:/Users/username/example_dictionary.csv&quot;</span>)</span></code></pre></div>
+<p>Data using API:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>datos_api <span class="ot">&lt;-</span> <span class="fu">redcap_data</span>(<span class="at">uri =</span><span class="st">&quot;https://redcap.idibell.cat/api/&quot;</span>,</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">token =</span> <span class="st">&quot;55E5C3D1E83213ADA2182A4BFDEA&quot;</span>)</span></code></pre></div>
+<p>For the examples we will use COVICAN dataset that is already included
+in the package. For more information use <code>?covican</code>.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>datos_redcap <span class="ot">&lt;-</span> covican</span></code></pre></div>
+<pre><code>List of 2
+ $ data      :&#39;data.frame&#39;: 342 obs. of  56 variables:
+ $ dictionary:&#39;data.frame&#39;: 21 obs. of  8 variables:</code></pre>
+<p><code>datos_redcap$data</code>:</p>
+<pre><code>   record_id        redcap_event_name redcap_data_access_group
+1      100-6      initial_visit_arm_1              hospital_11
+2      100-6 follow_up_visit_da_arm_1              hospital_11
+21    100-13      initial_visit_arm_1              hospital_11
+22    100-13 follow_up_visit_da_arm_1              hospital_11
+34    100-16      initial_visit_arm_1              hospital_11
+35    100-16 follow_up_visit_da_arm_1              hospital_11</code></pre>
+<p><code>datos_redcap$dictionary</code>:</p>
+<pre><code>            field_name                   form_name field_type
+1            record_id inclusionexclusion_criteria       text
+2                inc_1 inclusionexclusion_criteria      radio
+3                inc_2 inclusionexclusion_criteria      radio
+4                inc_3 inclusionexclusion_criteria      radio
+6                exc_1 inclusionexclusion_criteria      radio
+10 screening_fail_crit inclusionexclusion_criteria       calc</code></pre>
+</div>
+<div id="rd_transform" class="section level2" number="3.2">
+<h2><span class="header-section-number">3.2</span>
+<strong>rd_transform</strong></h2>
+<div id="raw-data-transformation" class="section level3" number="3.2.1">
+<h3><span class="header-section-number">3.2.1</span> <em>Raw data
+transformation</em></h3>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="co">#To print the results</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>datos<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>1. Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;
+
+| Total calculated fields | Non-transcribed fields | Recalculated different fields |
+|:-----------------------:|:----------------------:|:-----------------------------:|
+|            2            |         0 (0%)         |            1 (50%)            |
+
+
+|     field_name      | Transcribed? | Is equal? |
+|:-------------------:|:------------:|:---------:|
+|         age         |     Yes      |   FALSE   |
+| screening_fail_crit |     Yes      |   TRUE    |
+
+2. Transforming checkboxes: changing their values to No/Yes, their names to the names of its options and transforming missing values of those checkboxes having question doors specified in the branching logic
+
+Table: Checkbox variables advisable to be reviewed
+
+| Variables without any branching logic |
+|:-------------------------------------:|
+|        type_underlying_disease        |
+
+3. Replacing original variables for their factor version
+4. Deleting variables that contain some patterns</code></pre>
+<p>As you can see, there are 4 steps in the transformation:</p>
+<ol>
+<li>
+Recalculate autocalculated fields
+</li>
+<p>There were two autocalculated fields, as we see in the summary we
+have been able to recalculate both of them and there is one that has
+changed:</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>data <span class="sc">%&gt;%</span> </span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">select</span>(d_birth, d_ingreso, age, age_recalc) <span class="sc">%&gt;%</span> </span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">filter</span>(age <span class="sc">!=</span> age_recalc)</span></code></pre></div>
+<pre><code>     d_birth  d_ingreso age age_recalc
+1 1945-04-16 2020-04-16  74         75</code></pre>
+<li>
+Transformation of the checkboxes: change the names of the checkboxes to
+the names of their options and the name of their labels to No/Yes. Also,
+if the checkbox contains a door question, it changes the missings to
+</li>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Checkbox no gatekeeper</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+ No Yes 
+103  87 </code></pre>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co">#Checkbox with gatekeeper: [type_underlying_disease(0)]=&#39;1&#39;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="co">#In the original data set:</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(datos_redcap<span class="sc">$</span>data<span class="sc">$</span>type_underlying_disease___0, datos_redcap<span class="sc">$</span>data<span class="sc">$</span>underlying_disease_hemato___1)</span></code></pre></div>
+<pre><code>   
+      0   1
+  0 103   0
+  1  84   3</code></pre>
+<div class="sourceCode" id="cb15"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co">#In the transformed data set:</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>type_underlying_disease_haematological_cancer, data<span class="sc">$</span>underlying_disease_hemato_acute_myeloid_leukemia)</span></code></pre></div>
+<pre><code>     
+      No Yes
+  No   0   0
+  Yes 84   3</code></pre>
+<li>
+Changes the original variables by their version in factor, except
+‘redcap_event_name’ and ‘redcap_data_access_group’ which keep the two
+versions and the checkboxes that have already been transformed.
+</li>
+<div class="sourceCode" id="cb17"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(data<span class="sc">$</span>dm)</span></code></pre></div>
+<pre><code> Factor w/ 2 levels &quot;No&quot;,&quot;Yes&quot;: 1 NA 2 NA 2 NA 1 NA 2 NA ...</code></pre>
+<li>
+Eliminates variables that contain a pattern. By default the pattern it
+looks for is ’_complete’. In this case there was no ’_complete’ variable
+initially.
+</li>
+</ol>
+</div>
+<div id="data-transformation-and-classification-by-event" class="section level3" number="3.2.2">
+<h3><span class="header-section-number">3.2.2</span> <em>Data
+transformation and classification by event</em></h3>
+<p>In order to perform the transformation by event we have to add the
+path where the file with the correspondence between events and forms is
+located. In this case, we will use the path where we have saved the file
+of this correspondence that we have downloaded from the COVICAN
+project.</p>
+<div class="sourceCode" id="cb19"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">event_path =</span> <span class="st">&quot;files/COVICAN_instruments.csv&quot;</span>,</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">final_format =</span> <span class="st">&quot;by_event&quot;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="co">#To print the results</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>datos<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>1. Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;
+
+| Total calculated fields | Non-transcribed fields | Recalculated different fields |
+|:-----------------------:|:----------------------:|:-----------------------------:|
+|            2            |         0 (0%)         |            1 (50%)            |
+
+
+|     field_name      | Transcribed? | Is equal? |
+|:-------------------:|:------------:|:---------:|
+|         age         |     Yes      |   FALSE   |
+| screening_fail_crit |     Yes      |   TRUE    |
+
+2. Transforming checkboxes: changing their values to No/Yes, their names to the names of its options and transforming missing values of those checkboxes having question doors specified in the branching logic
+
+Table: Checkbox variables advisable to be reviewed
+
+| Variables without any branching logic |
+|:-------------------------------------:|
+|        type_underlying_disease        |
+
+3. Replacing original variables for their factor version
+4. Deleting variables that contain some patterns
+5. Erasing variables from forms that are not linked to any event
+6. Final arrangment of the data by event</code></pre>
+<p>Now a step in the transformation has been added, which is to split
+the preprocessed data for each of the events in the study so that the
+function returns</p>
+<div class="sourceCode" id="cb21"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>datos<span class="sc">$</span>data</span></code></pre></div>
+<pre><code># A tibble: 2 × 3
+  events                   vars       df             
+  &lt;chr&gt;                    &lt;list&gt;     &lt;list&gt;         
+1 initial_visit_arm_1      &lt;chr [25]&gt; &lt;df [190 × 25]&gt;
+2 follow_up_visit_da_arm_1 &lt;chr [8]&gt;  &lt;df [152 × 8]&gt; </code></pre>
+</div>
+<div id="data-transformation-and-classification-by-form" class="section level3" number="3.2.3">
+<h3><span class="header-section-number">3.2.3</span> <em>Data
+transformation and classification by form</em></h3>
+<p>To perform the transformation by form we must also add the path of
+the file of the events and forms</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(<span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">event_path =</span> <span class="st">&quot;files/COVICAN_instruments.csv&quot;</span>,</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">final_format =</span> <span class="st">&quot;by_form&quot;</span></span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="co">#To print the results</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>datos<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>1. Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;
+
+| Total calculated fields | Non-transcribed fields | Recalculated different fields |
+|:-----------------------:|:----------------------:|:-----------------------------:|
+|            2            |         0 (0%)         |            1 (50%)            |
+
+
+|     field_name      | Transcribed? | Is equal? |
+|:-------------------:|:------------:|:---------:|
+|         age         |     Yes      |   FALSE   |
+| screening_fail_crit |     Yes      |   TRUE    |
+
+2. Transforming checkboxes: changing their values to No/Yes, their names to the names of its options and transforming missing values of those checkboxes having question doors specified in the branching logic
+
+Table: Checkbox variables advisable to be reviewed
+
+| Variables without any branching logic |
+|:-------------------------------------:|
+|        type_underlying_disease        |
+
+3. Replacing original variables for their factor version
+4. Deleting variables that contain some patterns
+5. Erasing variables from forms that are not linked to any event
+6. Final arrangment of the data by form</code></pre>
+<p>As before, a final step is added, which consists of splitting the
+preprocessed data for each form of the study so that the function
+returns</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>datos<span class="sc">$</span>data</span></code></pre></div>
+<pre><code># A tibble: 6 × 4
+  form                        events    vars       df             
+  &lt;chr&gt;                       &lt;list&gt;    &lt;list&gt;     &lt;list&gt;         
+1 inclusionexclusion_criteria &lt;chr [1]&gt; &lt;chr [11]&gt; &lt;df [190 × 11]&gt;
+2 demographics                &lt;chr [1]&gt; &lt;chr [9]&gt;  &lt;df [190 × 9]&gt; 
+3 comorbidities               &lt;chr [1]&gt; &lt;chr [10]&gt; &lt;df [190 × 10]&gt;
+4 vital_signs                 &lt;chr [2]&gt; &lt;chr [7]&gt;  &lt;df [177 × 7]&gt; 
+5 laboratory_findings         &lt;chr [2]&gt; &lt;chr [7]&gt;  &lt;df [177 × 7]&gt; 
+6 microbiological_studies     &lt;chr [1]&gt; &lt;chr [6]&gt;  &lt;df [190 × 6]&gt; </code></pre>
+</div>
+<div id="additional-arguments" class="section level3" number="3.2.4">
+<h3><span class="header-section-number">3.2.4</span> <em>Additional
+arguments</em></h3>
+<p><u>checkbox_labels</u>: specify the name of the categories that will
+have the checkbox variables. Default is No/Yes, we can change it to
+N/Y.</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">checkbox_labels =</span> <span class="fu">c</span>(<span class="st">&quot;N&quot;</span>, <span class="st">&quot;Y&quot;</span>)</span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span></code></pre></div>
+<p>We see how the categories of the following checkboxes have changed,
+for example</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+  N   Y 
+103  87 </code></pre>
+<p><u>exclude_to_factor</u>: specify the name of a variable that we do
+not want to be transformed to a factor. For example, if we want the
+variable dm to keep its numeric version</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">exclude_to_factor =</span> <span class="st">&quot;dm&quot;</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>dm)</span></code></pre></div>
+<pre><code>
+  0   1 
+140  45 </code></pre>
+<p><u>keep_labels</u>: logical argument to retain data set tags that are
+processed from REDCap</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">keep_labels =</span> <span class="cn">TRUE</span></span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(data[,<span class="dv">1</span><span class="sc">:</span><span class="dv">5</span>])</span></code></pre></div>
+<pre><code>&#39;data.frame&#39;:   342 obs. of  5 variables:
+ $ record_id                      : &#39;labelled&#39; chr  &quot;100-13&quot; &quot;100-13&quot; &quot;100-16&quot; &quot;100-16&quot; ...
+  ..- attr(*, &quot;label&quot;)= Named chr &quot;&quot;
+  .. ..- attr(*, &quot;names&quot;)= chr &quot;record_id&quot;
+ $ redcap_event_name              : &#39;labelled&#39; chr  &quot;initial_visit_arm_1&quot; &quot;follow_up_visit_da_arm_1&quot; &quot;initial_visit_arm_1&quot; &quot;follow_up_visit_da_arm_1&quot; ...
+  ..- attr(*, &quot;label&quot;)= Named chr &quot;Event Name&quot;
+  .. ..- attr(*, &quot;names&quot;)= chr &quot;redcap_event_name&quot;
+ $ redcap_event_name.factor       : Factor w/ 5 levels &quot;Initial visit&quot;,..: 1 2 1 2 1 2 1 2 1 2 ...
+  ..- attr(*, &quot;label&quot;)= Named chr &quot;&quot;
+  .. ..- attr(*, &quot;names&quot;)= chr &quot;redcap_data_access_group&quot;
+ $ redcap_data_access_group       : &#39;labelled&#39; chr  &quot;hospital_11&quot; &quot;hospital_11&quot; &quot;hospital_11&quot; &quot;hospital_11&quot; ...
+  ..- attr(*, &quot;label&quot;)= Named chr &quot;Patients older than 18 years&quot;
+  .. ..- attr(*, &quot;names&quot;)= chr &quot;inc_1&quot;
+ $ redcap_data_access_group.factor: Factor w/ 26 levels &quot;Hospital 1&quot;,&quot;Hospital 2&quot;,..: 11 11 11 11 11 11 11 11 11 11 ...
+  ..- attr(*, &quot;label&quot;)= Named chr &quot;Cancer patients&quot;
+  .. ..- attr(*, &quot;names&quot;)= chr &quot;inc_2&quot;</code></pre>
+<p><u>delete_vars</u>: specify strings whereby any variables containing
+them will be removed from the data set. By default all variables
+containing ’_complete’ are removed. In this case we did not have any
+complete variables. We want for example to remove all inclusion and
+exclusion criteria</p>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb34-2"><a href="#cb34-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb34-3"><a href="#cb34-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb34-4"><a href="#cb34-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">delete_vars =</span> <span class="fu">c</span>(<span class="st">&quot;inc_&quot;</span>, <span class="st">&quot;exc_&quot;</span>)</span>
+<span id="cb34-5"><a href="#cb34-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb34-6"><a href="#cb34-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb34-8"><a href="#cb34-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb34-9"><a href="#cb34-9" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data)</span></code></pre></div>
+<pre><code> [1] &quot;record_id&quot;                                              
+ [2] &quot;redcap_event_name&quot;                                      
+ [3] &quot;redcap_event_name.factor&quot;                               
+ [4] &quot;redcap_data_access_group&quot;                               
+ [5] &quot;redcap_data_access_group.factor&quot;                        
+ [6] &quot;screening_fail_crit&quot;                                    
+ [7] &quot;screening_fail_crit_recalc&quot;                             
+ [8] &quot;d_birth&quot;                                                
+ [9] &quot;d_ingreso&quot;                                              
+[10] &quot;age&quot;                                                    
+[11] &quot;age_recalc&quot;                                             
+[12] &quot;dm&quot;                                                     
+[13] &quot;type_dm&quot;                                                
+[14] &quot;copd&quot;                                                   
+[15] &quot;fio2_aportado&quot;                                          
+[16] &quot;analitica_disponible&quot;                                   
+[17] &quot;potassium&quot;                                              
+[18] &quot;resp_freq&quot;                                              
+[19] &quot;hemato_neo&quot;                                             
+[20] &quot;leukemia&quot;                                               
+[21] &quot;type_underlying_disease_haematological_cancer&quot;          
+[22] &quot;type_underlying_disease_solid_tumour&quot;                   
+[23] &quot;underlying_disease_hemato_acute_myeloid_leukemia&quot;       
+[24] &quot;underlying_disease_hemato_myelodysplastic_syndrome&quot;     
+[25] &quot;underlying_disease_hemato_chronic_myeloid_leukaemia&quot;    
+[26] &quot;underlying_disease_hemato_acute_lymphoblastic_leukaemia&quot;
+[27] &quot;underlying_disease_hemato_hodgkin_lymphoma&quot;             
+[28] &quot;underlying_disease_hemato_non_hodgkin_lymphoma&quot;         
+[29] &quot;underlying_disease_hemato_multiple_myeloma&quot;             
+[30] &quot;underlying_disease_hemato_myelofibrosis&quot;                
+[31] &quot;underlying_disease_hemato_aplastic_anaemia&quot;             
+[32] &quot;urine_culture&quot;                                          </code></pre>
+<p><u>which_event</u>: in the event-driven transformation, specify
+whether you only want a specific event to be returned. For example, we
+only want the first visit</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb36-2"><a href="#cb36-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb36-3"><a href="#cb36-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb36-4"><a href="#cb36-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">event_path =</span> <span class="st">&quot;files/COVICAN_instruments.csv&quot;</span>,</span>
+<span id="cb36-5"><a href="#cb36-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">final_format =</span> <span class="st">&quot;by_event&quot;</span>,</span>
+<span id="cb36-6"><a href="#cb36-6" aria-hidden="true" tabindex="-1"></a>             <span class="at">which_event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span></span>
+<span id="cb36-7"><a href="#cb36-7" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb36-8"><a href="#cb36-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-9"><a href="#cb36-9" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb36-10"><a href="#cb36-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb36-11"><a href="#cb36-11" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>redcap_event_name)</span></code></pre></div>
+<pre><code>
+initial_visit_arm_1 
+                190 </code></pre>
+<p><u>which_form</u>: in the transformation by form, specify if you only
+want a specific form to be returned. For example, we only want the form
+demographics</p>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb38-2"><a href="#cb38-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb38-3"><a href="#cb38-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb38-4"><a href="#cb38-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">event_path =</span> <span class="st">&quot;files/COVICAN_instruments.csv&quot;</span>,</span>
+<span id="cb38-5"><a href="#cb38-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">final_format =</span> <span class="st">&quot;by_form&quot;</span>,</span>
+<span id="cb38-6"><a href="#cb38-6" aria-hidden="true" tabindex="-1"></a>             <span class="at">which_form =</span> <span class="st">&quot;demographics&quot;</span></span>
+<span id="cb38-7"><a href="#cb38-7" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb38-8"><a href="#cb38-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-9"><a href="#cb38-9" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb38-10"><a href="#cb38-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb38-11"><a href="#cb38-11" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data)</span></code></pre></div>
+<pre><code>[1] &quot;record_id&quot;                       &quot;redcap_event_name&quot;              
+[3] &quot;redcap_data_access_group&quot;        &quot;redcap_event_name.factor&quot;       
+[5] &quot;redcap_data_access_group.factor&quot; &quot;d_ingreso&quot;                      
+[7] &quot;d_birth&quot;                         &quot;age&quot;                            
+[9] &quot;age_recalc&quot;                     </code></pre>
+<p><u>wide</u>: so that the data set that is returned in the
+transformation by form is in wide format or not. We do this for the
+laboratory findings form</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb40-2"><a href="#cb40-2" aria-hidden="true" tabindex="-1"></a>             <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb40-3"><a href="#cb40-3" aria-hidden="true" tabindex="-1"></a>             <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb40-4"><a href="#cb40-4" aria-hidden="true" tabindex="-1"></a>             <span class="at">event_path =</span> <span class="st">&quot;files/COVICAN_instruments.csv&quot;</span>,</span>
+<span id="cb40-5"><a href="#cb40-5" aria-hidden="true" tabindex="-1"></a>             <span class="at">final_format =</span> <span class="st">&quot;by_form&quot;</span>,</span>
+<span id="cb40-6"><a href="#cb40-6" aria-hidden="true" tabindex="-1"></a>             <span class="at">which_form =</span> <span class="st">&quot;laboratory_findings&quot;</span>,</span>
+<span id="cb40-7"><a href="#cb40-7" aria-hidden="true" tabindex="-1"></a>             <span class="at">wide =</span> <span class="cn">TRUE</span></span>
+<span id="cb40-8"><a href="#cb40-8" aria-hidden="true" tabindex="-1"></a>             )</span>
+<span id="cb40-9"><a href="#cb40-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-10"><a href="#cb40-10" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb40-11"><a href="#cb40-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb40-12"><a href="#cb40-12" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(data)</span></code></pre></div>
+<pre><code># A tibble: 6 × 5
+  record_id analitica_disponible_1 analitica_disponible_2 potassium_1 potassiu…¹
+  &lt;chr&gt;     &lt;fct&gt;                  &lt;fct&gt;                        &lt;dbl&gt;      &lt;dbl&gt;
+1 100-13    Yes                    Yes                           3.66       4.1 
+2 100-16    Yes                    No                            4.04      NA   
+3 100-31    Yes                    &lt;NA&gt;                          4.58      NA   
+4 100-34    Yes                    No                            3.48      NA   
+5 100-36    Yes                    No                            4.09      NA   
+6 100-52    Yes                    Yes                           3.7        7.15
+# … with abbreviated variable name ¹​potassium_2</code></pre>
+</div>
+</div>
+<div id="rd_rlogic" class="section level2" number="3.3">
+<h2><span class="header-section-number">3.3</span>
+<strong>rd_rlogic</strong></h2>
+<p>It transforms the REDCap logic into logic that can be evaluated in R.
+This function is built into the recalculate function, but it may be
+useful to use it separately. Let’s see how it transforms the logics of
+the autocalculated field calculations.</p>
+<div class="sourceCode" id="cb42"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb42-1"><a href="#cb42-1" aria-hidden="true" tabindex="-1"></a><span class="co">#screening failure</span></span>
+<span id="cb42-2"><a href="#cb42-2" aria-hidden="true" tabindex="-1"></a><span class="fu">rd_rlogic</span>(<span class="at">logic =</span> <span class="st">&quot;if([exc_1]=&#39;1&#39; or [inc_1]=&#39;0&#39; or [inc_2]=&#39;0&#39; or [inc_3]=&#39;0&#39;,1,0)&quot;</span>,</span>
+<span id="cb42-3"><a href="#cb42-3" aria-hidden="true" tabindex="-1"></a>          <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>[1] &quot;ifelse(data$exc_1==&#39;1&#39; | data$inc_1==&#39;0&#39; | data$inc_2==&#39;0&#39; | data$inc_3==&#39;0&#39;,1,0)&quot;</code></pre>
+<div class="sourceCode" id="cb44"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb44-1"><a href="#cb44-1" aria-hidden="true" tabindex="-1"></a><span class="co">#age</span></span>
+<span id="cb44-2"><a href="#cb44-2" aria-hidden="true" tabindex="-1"></a><span class="fu">rd_rlogic</span>(<span class="at">logic =</span> <span class="st">&#39;rounddown(datediff([d_birth],[d_ingreso],&quot;y&quot;,&quot;dmy&quot;),0)&#39;</span>,</span>
+<span id="cb44-3"><a href="#cb44-3" aria-hidden="true" tabindex="-1"></a>          <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>[1] &quot;floor(lubridate::time_length(lubridate::interval(data$d_birth,data$d_ingreso), &#39;year&#39;))&quot;</code></pre>
+</div>
+<div id="rd_insert_na" class="section level2" number="3.4">
+<h2><span class="header-section-number">3.4</span>
+<strong>rd_insert_na</strong></h2>
+<p>Function to set missing variables when a certain logic is fulfilled.
+Useful for example in the checkboxes that we do not have a gatekeeper.
+For example, we put the checkbox without gatekeeper
+(type_underlying_disease) to missing when the age is less than 65 years
+old.</p>
+<div class="sourceCode" id="cb46"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb46-1"><a href="#cb46-1" aria-hidden="true" tabindex="-1"></a>datos <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(</span>
+<span id="cb46-2"><a href="#cb46-2" aria-hidden="true" tabindex="-1"></a>    <span class="at">data =</span> datos_redcap<span class="sc">$</span>data, </span>
+<span id="cb46-3"><a href="#cb46-3" aria-hidden="true" tabindex="-1"></a>    <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary</span>
+<span id="cb46-4"><a href="#cb46-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb46-5"><a href="#cb46-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-6"><a href="#cb46-6" aria-hidden="true" tabindex="-1"></a>data <span class="ot">&lt;-</span> datos<span class="sc">$</span>data</span>
+<span id="cb46-7"><a href="#cb46-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb46-8"><a href="#cb46-8" aria-hidden="true" tabindex="-1"></a><span class="co">#Before inserting missings</span></span>
+<span id="cb46-9"><a href="#cb46-9" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+ No Yes 
+103  87 </code></pre>
+<div class="sourceCode" id="cb48"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb48-1"><a href="#cb48-1" aria-hidden="true" tabindex="-1"></a>data2 <span class="ot">&lt;-</span> <span class="fu">rd_insert_na</span>(</span>
+<span id="cb48-2"><a href="#cb48-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">data =</span> data,</span>
+<span id="cb48-3"><a href="#cb48-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">filter =</span> <span class="fu">rep</span>(<span class="st">&quot;age &lt; 65&quot;</span>, <span class="dv">2</span>),</span>
+<span id="cb48-4"><a href="#cb48-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">vars =</span> <span class="fu">grep</span>(<span class="st">&quot;type_underlying_disease&quot;</span>, <span class="fu">names</span>(data), <span class="at">value =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb48-5"><a href="#cb48-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb48-6"><a href="#cb48-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb48-7"><a href="#cb48-7" aria-hidden="true" tabindex="-1"></a><span class="co">#After inserting missings</span></span>
+<span id="cb48-8"><a href="#cb48-8" aria-hidden="true" tabindex="-1"></a><span class="fu">table</span>(data2<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+ No Yes 
+ 65  50 </code></pre>
+</div>
+<div id="rd_query" class="section level2" number="3.5">
+<h2><span class="header-section-number">3.5</span>
+<strong>rd_query</strong></h2>
+<div id="output" class="section level3" number="3.5.1">
+<h3><span class="header-section-number">3.5.1</span>
+<em>Output</em></h3>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;font-weight: bold;">
+Identifier
+</th>
+<th style="text-align:left;font-weight: bold;">
+DAG
+</th>
+<th style="text-align:left;font-weight: bold;">
+Event
+</th>
+<th style="text-align:left;font-weight: bold;">
+Instrument
+</th>
+<th style="text-align:left;font-weight: bold;">
+Field
+</th>
+<th style="text-align:left;font-weight: bold;">
+Repetition
+</th>
+<th style="text-align:left;font-weight: bold;">
+Description
+</th>
+<th style="text-align:left;font-weight: bold;">
+Query
+</th>
+<th style="text-align:left;font-weight: bold;">
+Code
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+100-58
+</td>
+<td style="text-align:left;">
+Hospital 11
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Comorbidities
+</td>
+<td style="text-align:left;">
+copd
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Chronic pulmonary disease
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+100-58-1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-113
+</td>
+<td style="text-align:left;">
+Hospital 24
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Demographics
+</td>
+<td style="text-align:left;">
+age
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Age
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+102-113-1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+105-11
+</td>
+<td style="text-align:left;">
+Hospital 5
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Comorbidities
+</td>
+<td style="text-align:left;">
+copd
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Chronic pulmonary disease
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+105-11-1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+105-11
+</td>
+<td style="text-align:left;">
+Hospital 5
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Demographics
+</td>
+<td style="text-align:left;">
+age
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Age
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+105-11-2
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+105-56
+</td>
+<td style="text-align:left;">
+Hospital 5
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Comorbidities
+</td>
+<td style="text-align:left;">
+copd
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Chronic pulmonary disease
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+105-56-1
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+105-56
+</td>
+<td style="text-align:left;">
+Hospital 5
+</td>
+<td style="text-align:left;">
+Initial visit
+</td>
+<td style="text-align:left;">
+Demographics
+</td>
+<td style="text-align:left;">
+age
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Age
+</td>
+<td style="text-align:left;">
+The value is NA and it should not be missing
+</td>
+<td style="text-align:left;">
+105-56-2
+</td>
+</tr>
+</tbody>
+</table></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul>
+<p><br></p>
+</div>
+<div id="missings" class="section level3" number="3.5.2">
+<h3><span class="header-section-number">3.5.2</span>
+<em>Missings</em></h3>
+<p><u>Mandatory arguments</u>:</p>
+<div class="sourceCode" id="cb50"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb50-1"><a href="#cb50-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>, <span class="st">&quot;age&quot;</span>),</span>
+<span id="cb50-2"><a href="#cb50-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb50-3"><a href="#cb50-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb50-4"><a href="#cb50-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb50-5"><a href="#cb50-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb50-6"><a href="#cb50-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb50-7"><a href="#cb50-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb50-8"><a href="#cb50-8" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">6</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">5</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Optional arguments</u>:</p>
+<div class="sourceCode" id="cb51"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a>example<span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;age&quot;</span>, <span class="st">&quot;copd&quot;</span>),</span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>                        <span class="at">variables_names =</span> <span class="fu">c</span>(<span class="st">&quot;Age&quot;</span>, <span class="st">&quot;Chronic obstructive pulmonary disease&quot;</span>),<span class="do">#### OPCIONAL</span></span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a>                        <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a>                        <span class="at">query_name =</span> <span class="fu">c</span>(<span class="st">&quot;Age is missing at baseline visit&quot;</span>, <span class="st">&quot;COPD&quot;</span>), <span class="do">#### OPCIONAL</span></span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a>                        <span class="at">instrument =</span> <span class="fu">c</span>(<span class="st">&quot;Inclusión del paciente&quot;</span>,<span class="st">&quot;Inclusión&quot;</span>),  <span class="do">#### OPCIONAL</span></span>
+<span id="cb51-6"><a href="#cb51-6" aria-hidden="true" tabindex="-1"></a>                        <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb51-7"><a href="#cb51-7" aria-hidden="true" tabindex="-1"></a>                        <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb51-8"><a href="#cb51-8" aria-hidden="true" tabindex="-1"></a>                        <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<p><br></p>
+</div>
+<div id="missings-in-a-branching-logic" class="section level3" number="3.5.3">
+<h3><span class="header-section-number">3.5.3</span> <em>Missings in a
+branching logic</em></h3>
+<p><u>Sin filtro</u>:</p>
+<div class="sourceCode" id="cb52"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb52-1"><a href="#cb52-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;age&quot;</span>, <span class="st">&quot;copd&quot;</span>, <span class="st">&quot;potassium&quot;</span>),</span>
+<span id="cb52-2"><a href="#cb52-2" aria-hidden="true" tabindex="-1"></a>                          <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb52-3"><a href="#cb52-3" aria-hidden="true" tabindex="-1"></a>                          <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb52-4"><a href="#cb52-4" aria-hidden="true" tabindex="-1"></a>                          <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb52-5"><a href="#cb52-5" aria-hidden="true" tabindex="-1"></a>                          <span class="at">data=</span>datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>Warning: Some of the variables that were checked for missings present a branching logic. 
+Check the results tab of output for more details (...$results).</code></pre>
+<div class="sourceCode" id="cb54"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb54-1"><a href="#cb54-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb54-2"><a href="#cb54-2" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<colgroup>
+<col width="15%" />
+<col width="36%" />
+<col width="9%" />
+<col width="38%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+<th align="center">Branching logic</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">5</td>
+<td align="center">-</td>
+</tr>
+<tr class="even">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">6</td>
+<td align="center">-</td>
+</tr>
+<tr class="odd">
+<td align="center">potassium</td>
+<td align="center">Potassium</td>
+<td align="center">31</td>
+<td align="center">[analitica_disponible]=‘1’</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Applying filter</u>:</p>
+<div class="sourceCode" id="cb55"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;potassium&quot;</span>),</span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb55-3"><a href="#cb55-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb55-4"><a href="#cb55-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb55-5"><a href="#cb55-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data,</span>
+<span id="cb55-6"><a href="#cb55-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">filter =</span> <span class="fu">c</span>(<span class="st">&quot;analitica_disponible==&#39;1&#39;&quot;</span>))</span></code></pre></div>
+<pre><code>Warning: Some of the variables that were checked for missings present a branching logic. 
+Check the results tab of output for more details (...$results).</code></pre>
+<div class="sourceCode" id="cb57"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+<th align="center">Branching logic</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">potassium</td>
+<td align="center">Potassium</td>
+<td align="center">21</td>
+<td align="center">[analitica_disponible]=‘1’</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+</div>
+<div id="expresiones" class="section level3" number="3.5.4">
+<h3><span class="header-section-number">3.5.4</span>
+<em>Expresiones</em></h3>
+<p><u>Simple</u>:</p>
+<div class="sourceCode" id="cb58"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb58-1"><a href="#cb58-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables=</span><span class="fu">c</span>(<span class="st">&quot;age&quot;</span>),</span>
+<span id="cb58-2"><a href="#cb58-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression=</span><span class="fu">c</span>(<span class="st">&quot;&gt;20&quot;</span>),</span>
+<span id="cb58-3"><a href="#cb58-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event=</span><span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb58-4"><a href="#cb58-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic=</span>datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb58-5"><a href="#cb58-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data=</span>datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb58-6"><a href="#cb58-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb58-7"><a href="#cb58-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb58-8"><a href="#cb58-8" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">185</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Complex</u>:</p>
+<div class="sourceCode" id="cb59"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables=</span><span class="fu">c</span>(<span class="st">&quot;age&quot;</span>, <span class="st">&quot;copd&quot;</span>),</span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression=</span><span class="fu">c</span>(<span class="st">&quot;(&gt;20 &amp; &lt;70) | %in%NA&quot;</span>, <span class="st">&quot;==1&quot;</span>),</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event=</span><span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic=</span>datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data=</span>datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">108</td>
+</tr>
+<tr class="even">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">21</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+</div>
+<div id="special-cases" class="section level3" number="3.5.5">
+<h3><span class="header-section-number">3.5.5</span> <em>Special
+cases</em></h3>
+<p><u>Same expression for all variables</u>:</p>
+<div class="sourceCode" id="cb60"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb60-1"><a href="#cb60-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>,<span class="st">&quot;age&quot;</span>,<span class="st">&quot;dm&quot;</span>),</span>
+<span id="cb60-2"><a href="#cb60-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb60-3"><a href="#cb60-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb60-4"><a href="#cb60-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb60-5"><a href="#cb60-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>Warning: There are more variables than expressions, so the same expression was
+applied to all variables</code></pre>
+<div class="sourceCode" id="cb62"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb62-1"><a href="#cb62-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb62-2"><a href="#cb62-2" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<colgroup>
+<col width="15%" />
+<col width="74%" />
+<col width="10%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">6</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">5</td>
+</tr>
+<tr class="odd">
+<td align="center">dm</td>
+<td align="center">Diabetes (treated with insulin or antidiabetic …</td>
+<td align="center">5</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Not defining an event</u>:</p>
+<div class="sourceCode" id="cb63"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>),</span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb63-3"><a href="#cb63-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb63-4"><a href="#cb63-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>Warning: event = NA, but the dataset presents a variable that indicates the
+presence of events, please specify the event.</code></pre>
+<div class="sourceCode" id="cb65"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb65-2"><a href="#cb65-2" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">158</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+</div>
+<div id="additional-arguments-1" class="section level3" number="3.5.6">
+<h3><span class="header-section-number">3.5.6</span> <em>Additional
+arguments</em></h3>
+<p><u>negate</u>: negation of expression used</p>
+<div class="sourceCode" id="cb66"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb66-1"><a href="#cb66-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>),</span>
+<span id="cb66-2"><a href="#cb66-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb66-3"><a href="#cb66-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">negate =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb66-4"><a href="#cb66-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb66-5"><a href="#cb66-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb66-6"><a href="#cb66-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb66-7"><a href="#cb66-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb66-8"><a href="#cb66-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb66-9"><a href="#cb66-9" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">184</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>addTo</u>: join queries to an existing data frame</p>
+<div class="sourceCode" id="cb67"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a>example2 <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;age&quot;</span>),</span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>),</span>
+<span id="cb67-3"><a href="#cb67-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb67-4"><a href="#cb67-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb67-5"><a href="#cb67-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data=</span>datos_redcap<span class="sc">$</span>data,</span>
+<span id="cb67-6"><a href="#cb67-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">addTo =</span> example)</span>
+<span id="cb67-7"><a href="#cb67-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb67-8"><a href="#cb67-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb67-9"><a href="#cb67-9" aria-hidden="true" tabindex="-1"></a>example2<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">184</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">5</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>report_title</u>: customize the queries table title</p>
+<div class="sourceCode" id="cb68"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb68-1"><a href="#cb68-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>, <span class="st">&quot;age&quot;</span>),</span>
+<span id="cb68-2"><a href="#cb68-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;&lt;20&quot;</span>),</span>
+<span id="cb68-3"><a href="#cb68-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb68-4"><a href="#cb68-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb68-5"><a href="#cb68-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data,</span>
+<span id="cb68-6"><a href="#cb68-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">report_title =</span> <span class="st">&quot;Missing COPD values in the baseline event&quot;</span>)</span>
+<span id="cb68-7"><a href="#cb68-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb68-8"><a href="#cb68-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb68-9"><a href="#cb68-9" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Missing COPD values in the baseline event</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">6</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>report_zeros</u>: choose whether variables with zero queries
+should be reported in the table</p>
+<div class="sourceCode" id="cb69"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_query</span>(<span class="at">variables =</span> <span class="fu">c</span>(<span class="st">&quot;copd&quot;</span>, <span class="st">&quot;age&quot;</span>),</span>
+<span id="cb69-2"><a href="#cb69-2" aria-hidden="true" tabindex="-1"></a>                         <span class="at">expression =</span> <span class="fu">c</span>(<span class="st">&quot;%in%NA&quot;</span>, <span class="st">&quot;&lt;20&quot;</span>),</span>
+<span id="cb69-3"><a href="#cb69-3" aria-hidden="true" tabindex="-1"></a>                         <span class="at">event =</span> <span class="st">&quot;initial_visit_arm_1&quot;</span>,</span>
+<span id="cb69-4"><a href="#cb69-4" aria-hidden="true" tabindex="-1"></a>                         <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb69-5"><a href="#cb69-5" aria-hidden="true" tabindex="-1"></a>                         <span class="at">data =</span> datos_redcap<span class="sc">$</span>data,</span>
+<span id="cb69-6"><a href="#cb69-6" aria-hidden="true" tabindex="-1"></a>                         <span class="at">report_zeros =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb69-7"><a href="#cb69-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb69-8"><a href="#cb69-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Printing results</span></span>
+<span id="cb69-9"><a href="#cb69-9" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Variables</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">copd</td>
+<td align="center">Chronic pulmonary disease</td>
+<td align="center">6</td>
+</tr>
+<tr class="even">
+<td align="center">age</td>
+<td align="center">Age</td>
+<td align="center">0</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+</div>
+</div>
+<div id="rd_event" class="section level2" number="3.6">
+<h2><span class="header-section-number">3.6</span>
+<strong>rd_event</strong></h2>
+<p><u>Simple</u>:</p>
+<div class="sourceCode" id="cb70"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb70-1"><a href="#cb70-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_event</span>(<span class="at">event =</span> <span class="st">&quot;follow_up_visit_da_arm_1&quot;</span>,</span>
+<span id="cb70-2"><a href="#cb70-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb70-3"><a href="#cb70-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb70-4"><a href="#cb70-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb70-5"><a href="#cb70-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Print results</span></span>
+<span id="cb70-6"><a href="#cb70-6" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Events</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">follow_up_visit_da_arm_1</td>
+<td align="center">Follow up visit day 14+/-5d</td>
+<td align="center">38</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Filter</u>:</p>
+<div class="sourceCode" id="cb71"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb71-1"><a href="#cb71-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_event</span>(<span class="at">event =</span> <span class="st">&quot;follow_up_visit_da_arm_1&quot;</span>,</span>
+<span id="cb71-2"><a href="#cb71-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">filter =</span> <span class="st">&quot;screening_fail_crit==0&quot;</span>,</span>
+<span id="cb71-3"><a href="#cb71-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb71-4"><a href="#cb71-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> datos_redcap<span class="sc">$</span>data)</span>
+<span id="cb71-5"><a href="#cb71-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb71-6"><a href="#cb71-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Print results</span></span>
+<span id="cb71-7"><a href="#cb71-7" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Events</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">follow_up_visit_da_arm_1</td>
+<td align="center">Follow up visit day 14+/-5d</td>
+<td align="center">34</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p><u>Several events</u>:</p>
+<div class="sourceCode" id="cb72"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb72-1"><a href="#cb72-1" aria-hidden="true" tabindex="-1"></a>example <span class="ot">&lt;-</span> <span class="fu">rd_event</span>(<span class="at">event =</span> <span class="fu">c</span>(<span class="st">&quot;initial_visit_arm_1&quot;</span>,<span class="st">&quot;follow_up_visit_da_arm_1&quot;</span>),</span>
+<span id="cb72-2"><a href="#cb72-2" aria-hidden="true" tabindex="-1"></a>                    <span class="at">filter =</span> <span class="st">&quot;screening_fail_crit==0&quot;</span>,</span>
+<span id="cb72-3"><a href="#cb72-3" aria-hidden="true" tabindex="-1"></a>                    <span class="at">dic =</span> datos_redcap<span class="sc">$</span>dictionary,</span>
+<span id="cb72-4"><a href="#cb72-4" aria-hidden="true" tabindex="-1"></a>                    <span class="at">data =</span> datos_redcap<span class="sc">$</span>data,</span>
+<span id="cb72-5"><a href="#cb72-5" aria-hidden="true" tabindex="-1"></a>                    <span class="at">report_zeros =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb72-6"><a href="#cb72-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb72-7"><a href="#cb72-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Print results</span></span>
+<span id="cb72-8"><a href="#cb72-8" aria-hidden="true" tabindex="-1"></a>example<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of queries</caption>
+<thead>
+<tr class="header">
+<th align="center">Events</th>
+<th align="center">Description</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">follow_up_visit_da_arm_1</td>
+<td align="center">Follow up visit day 14+/-5d</td>
+<td align="center">34</td>
+</tr>
+<tr class="even">
+<td align="center">initial_visit_arm_1</td>
+<td align="center">Initial visit</td>
+<td align="center">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div id="check_queries" class="section level2" number="3.7">
+<h2><span class="header-section-number">3.7</span>
+<strong>check_queries</strong></h2>
+<div class="sourceCode" id="cb73"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb73-1"><a href="#cb73-1" aria-hidden="true" tabindex="-1"></a>check <span class="ot">&lt;-</span> <span class="fu">check_queries</span>(<span class="at">old =</span> example<span class="sc">$</span>queries, <span class="at">new =</span> queries_nuevas)</span>
+<span id="cb73-2"><a href="#cb73-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb73-3"><a href="#cb73-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Print results</span></span>
+<span id="cb73-4"><a href="#cb73-4" aria-hidden="true" tabindex="-1"></a>check<span class="sc">$</span>results</span></code></pre></div>
+<table>
+<caption>Report of modifications</caption>
+<thead>
+<tr class="header">
+<th align="center">State</th>
+<th align="center">Total</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="center">Modified</td>
+<td align="center">18</td>
+</tr>
+<tr class="even">
+<td align="center">Unmodified</td>
+<td align="center">16</td>
+</tr>
+<tr class="odd">
+<td align="center">New</td>
+<td align="center">1</td>
+</tr>
+</tbody>
+</table>
+<p><br></p>
+<p>Query control output:</p>
+<table class="table" style="margin-left: auto; margin-right: auto;">
+<thead>
+<tr>
+<th style="text-align:left;font-weight: bold;">
+Identifier
+</th>
+<th style="text-align:left;font-weight: bold;">
+DAG
+</th>
+<th style="text-align:left;font-weight: bold;">
+Event
+</th>
+<th style="text-align:left;font-weight: bold;">
+Instrument
+</th>
+<th style="text-align:left;font-weight: bold;">
+Field
+</th>
+<th style="text-align:left;font-weight: bold;">
+Repetition
+</th>
+<th style="text-align:left;font-weight: bold;">
+Description
+</th>
+<th style="text-align:left;font-weight: bold;">
+Query
+</th>
+<th style="text-align:left;font-weight: bold;">
+Code
+</th>
+<th style="text-align:left;font-weight: bold;">
+Modification
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;">
+101-36
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+101-36-1
+</td>
+<td style="text-align:left;">
+Unmodified
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-6
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+102-6-1
+</td>
+<td style="text-align:left;">
+Unmodified
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-10
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+102-10-1
+</td>
+<td style="text-align:left;">
+Unmodified
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-13
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+102-13-1
+</td>
+<td style="text-align:left;">
+Unmodified
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-23
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+102-23-1
+</td>
+<td style="text-align:left;">
+Unmodified
+</td>
+</tr>
+<tr>
+<td style="text-align:left;">
+102-27
+</td>
+<td style="text-align:left;">
+Hospital 1
+</td>
+<td style="text-align:left;">
+follow_up_visit_da_arm_1
+</td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+<ul>
+<li></td>
+<td style="text-align:left;">
+Follow up visit day 14+/-5d
+</td>
+<td style="text-align:left;">
+The event ‘Follow up visit day 14+/-5d’ is missing.
+</td>
+<td style="text-align:left;">
+102-27-1
+</td>
+<td style="text-align:left;">
+Modified
+</td>
+</tr>
+</tbody>
+</table></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul></li>
+</ul>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>
