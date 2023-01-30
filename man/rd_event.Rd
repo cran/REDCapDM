@@ -36,7 +36,7 @@ rd_event(
 A dataframe with 9 columns meant to help the user identify each missing event and a table with the total of queries per variable.
 }
 \description{
-By default, if a record identifier has no information of a designated event, REDCap will not download it.
+When working with a longitudinal REDCap project, the exported data has a structure where each row represents one event per record. However, by default, REDCap will not export events that do not have information.
 This function allows you to point out which record identifiers do not have information of a determined event.
 }
 \examples{

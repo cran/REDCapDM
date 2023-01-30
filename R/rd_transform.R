@@ -86,7 +86,7 @@ rd_transform <- function(data, dic, event_path = NULL, checkbox_labels = c("No",
 
   results <- c(results, recalc$results)
 
-  results <- c(results, "\n2. Transforming checkboxes: changing their values to No/Yes, their names to the names of its options and transforming missing values of those checkboxes having question doors specified in the branching logic\n")
+  results <- c(results, "\n2. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options. For checkboxes that have a question door specified in the branching logic, converting some of their values to missing\n")
 
   #Identify checkbox variables:
   var_check<-names(data)[grep("___",names(data))]
@@ -206,11 +206,11 @@ rd_transform <- function(data, dic, event_path = NULL, checkbox_labels = c("No",
 
       if(is.null(which_event)){
 
-        data <- dades_events(data,dic,event)
+        data <- split_event(data,dic,event)
 
       }else{
 
-        data <- dades_events(data,dic,event,which=which_event)
+        data <- split_event(data,dic,event,which=which_event)
 
       }
 
@@ -225,11 +225,11 @@ rd_transform <- function(data, dic, event_path = NULL, checkbox_labels = c("No",
 
       if(is.null(which_form)){
 
-        data <- dades_forms(data, dic, event, which = NULL, wide)
+        data <- split_form(data, dic, event, which = NULL, wide)
 
       }else{
 
-        data <- dades_forms(data, dic, event, which=which_form, wide)
+        data <- split_form(data, dic, event, which=which_form, wide)
 
       }
 

@@ -1,7 +1,7 @@
 Package: REDCapDM
 Type: Package
 Title: 'REDCap' Data Management
-Version: 0.1.0
+Version: 0.1.1
 Authors@R: c(
     person("João", "Carmezim", email = "ubidi@idibell.cat", role = c("aut", "cre")),
     person("Judith", "Peñafiel", role = c("aut")),
@@ -13,6 +13,7 @@ Authors@R: c(
 Maintainer: João Carmezim <ubidi@idibell.cat>
 Description: Access and manage 'REDCap' data. 'REDCap' (Research Electronic Data CAPture; <https://projectredcap.org>) is a web application for building and managing online surveys and databases developed at Vanderbilt University. The API allows users to programmatic access data and project meta data (such as the data dictionary) from the web. This package allows us to read 'REDCap' data, exported or using an API connection, identify missing or extreme values, identify missing 'REDCap' events in each observation, do a follow-up of the queries initially identified and it also facilitates the process of data management.
 License: MIT + file LICENSE
+BugReports: https://github.com/ubidi/REDCapDM/issues
 Encoding: UTF-8
 RoxygenNote: 7.2.3
 Imports: dplyr, REDCapR, janitor, stringr, magrittr, tidyr, Hmisc,
@@ -22,7 +23,7 @@ VignetteBuilder: knitr
 Depends: R (>= 2.10)
 LazyData: true
 NeedsCompilation: no
-Packaged: 2022-12-22 13:32:24 UTC; jcarmezim
+Packaged: 2023-01-30 15:11:13 UTC; psatorra
 Author: João Carmezim [aut, cre],
   Judith Peñafiel [aut],
   Pau Satorra [aut],
@@ -30,4 +31,4 @@ Author: João Carmezim [aut, cre],
   Natàlia Pallarés [aut],
   Cristian Tebé [aut]
 Repository: CRAN
-Date/Publication: 2022-12-22 20:50:08 UTC
+Date/Publication: 2023-01-30 15:40:07 UTC

@@ -297,7 +297,7 @@ transform_name <- function(var_check,name,labels){
 #' @param dic Preprocessed dictionary.
 #' @param event Downloaded instrument-event mapping from REDCap.
 #' @param which Specify an event if only data for the desired event is wanted.
-dades_events <- function(data,dic,event,which=NULL){
+split_event <- function(data,dic,event,which=NULL){
 
   form <- unique_event_name <- field_type <- field_name <- branching_logic_show_field_only_if <- filtre_events <- no_filtre_events <- redcap_event_name <- vars_clau <- logic <- l <- events <- vars <- NULL
 
@@ -391,7 +391,7 @@ dades_events <- function(data,dic,event,which=NULL){
 #' @param which Specify a form if only data for the desired form is wanted.
 #' @param wide If the dataset needs to be in a wide format or not (long).
 
-dades_forms <- function(data, dic, event, which = NULL, wide=FALSE){
+split_form <- function(data, dic, event, which = NULL, wide=FALSE){
 
   field_type <- field_name <- vars <- events <- vars_esp <- df <- NULL
 

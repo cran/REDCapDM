@@ -1,7 +1,7 @@
 #' Identification of queries
 #'
-#' This function allows you to identify queries using a determined expression.
-#' It can be used to identify missing values, values outside the lower or upper limit of a variable and even identify missing values of variables that present a branching logic through the use of the filter argument.
+#' This function allows you to identify queries by using a specific expression.
+#' It can be used to identify missing values or values that fall outside the lower and upper limit of a variable.
 #'
 #' @param variables Vector with variables names from the database that will be checked. If this argument alongside with the argument `expression` are unspecified, this function will look for abnormal values using the minimum and maximum of each variable in the dataset (information contained in the dictionary).
 #' @param expression Expression that will be applied to the chosen variables, for example, "<170". If this argument is unspecified, this function will look for abnormal values using the minimum and maximum of each variable in the dataset (information contained in the dictionary).
@@ -21,7 +21,7 @@
 #' # Missings
 #' example <- rd_query(variables = c("copd", "age"),
 #'                     expression = c("%in%NA", "%in%NA"),
-#'                     event = "initial_visit_arm_1",
+#'                     event = "baseline_visit_arm_1",
 #'                     dic = covican$dictionary,
 #'                     data = covican$data)
 #' example
@@ -29,7 +29,7 @@
 #' # Expression
 #' example <- rd_query(variables="age",
 #'                     expression=">20",
-#'                     event="initial_visit_arm_1",
+#'                     event="baseline_visit_arm_1",
 #'                     dic=covican$dictionary,
 #'                     data=covican$data)
 #' example
@@ -37,10 +37,10 @@
 #' # Using a filter
 #' example <- rd_query(variables = "potassium",
 #'                     expression = "%in%NA",
-#'                     event = "initial_visit_arm_1",
+#'                     event = "baseline_visit_arm_1",
 #'                     dic = covican$dictionary,
 #'                     data = covican$data,
-#'                     filter = "analitica_disponible=='1'")
+#'                     filter = "available_analytics=='1'")
 #' example
 #' @export
 

@@ -1,6 +1,6 @@
 #' Identification of missing event/s
 #'
-#' By default, if a record identifier has no information of a designated event, REDCap will not download it.
+#' When working with a longitudinal REDCap project, the exported data has a structure where each row represents one event per record. However, by default, REDCap will not export events that do not have information.
 #' This function allows you to point out which record identifiers do not have information of a determined event.
 #'
 #' @param event Vector with the REDCap's events names to be analyzed.

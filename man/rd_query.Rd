@@ -51,14 +51,14 @@ rd_query(
 A list with a data frame with 9 columns meant to help the user identify each query and a table with the total of queries per variable.
 }
 \description{
-This function allows you to identify queries using a determined expression.
-It can be used to identify missing values, values outside the lower or upper limit of a variable and even identify missing values of variables that present a branching logic through the use of the filter argument.
+This function allows you to identify queries by using a specific expression.
+It can be used to identify missing values or values that fall outside the lower and upper limit of a variable.
 }
 \examples{
 # Missings
 example <- rd_query(variables = c("copd", "age"),
                     expression = c("\%in\%NA", "\%in\%NA"),
-                    event = "initial_visit_arm_1",
+                    event = "baseline_visit_arm_1",
                     dic = covican$dictionary,
                     data = covican$data)
 example
@@ -66,7 +66,7 @@ example
 # Expression
 example <- rd_query(variables="age",
                     expression=">20",
-                    event="initial_visit_arm_1",
+                    event="baseline_visit_arm_1",
                     dic=covican$dictionary,
                     data=covican$data)
 example
@@ -74,9 +74,9 @@ example
 # Using a filter
 example <- rd_query(variables = "potassium",
                     expression = "\%in\%NA",
-                    event = "initial_visit_arm_1",
+                    event = "baseline_visit_arm_1",
                     dic = covican$dictionary,
                     data = covican$data,
-                    filter = "analitica_disponible=='1'")
+                    filter = "available_analytics=='1'")
 example
 }
