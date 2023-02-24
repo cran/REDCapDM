@@ -1,6 +1,6 @@
 ## ----message=FALSE, warning=FALSE, include=FALSE------------------------------
 rm(list = ls())
-library(REDCapDM)
+library(REDCapDM) 
 library(kableExtra)
 library(knitr)
 library(dplyr)
@@ -53,8 +53,7 @@ kable(vars) %>%
 
 ## ----eval=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
 #  dataset_api <- redcap_data(uri ="https://redcap.idibell.cat/api/",
-#                             token = "55E5C3D1E83213ADA2182A4BFDEA",
-#                             event_path = "C:/Users/username/events.csv")
+#                             token = "55E5C3D1E83213ADA2182A4BFDEA")
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 #Option A: list object 
@@ -159,7 +158,7 @@ data2 <- rd_insert_na(dataset,
 table(data2$type_underlying_disease_haematological_cancer)
 
 ## ----message=FALSE, warning=FALSE, include=FALSE------------------------------
-example <- rd_query(covican,
+example <- rd_query(covican_transformed,
                     variables = c("copd"),
                     expression = c("%in%NA"),
                     event = "baseline_visit_arm_1")
@@ -169,8 +168,8 @@ kable(head(example$queries)) %>% kableExtra::row_spec(0,bold=TRUE) %>% kableExtr
 
 example$results
 
-## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-example <- rd_query(covican,
+## ----echo=TRUE, message=FALSE, warning=FALSE, comment=NA----------------------
+example <- rd_query(covican_transformed,
                     variables = c("copd", "age"),
                     expression = c("%in%NA", "%in%NA"),
                     event = "baseline_visit_arm_1")
@@ -337,6 +336,7 @@ example <- rd_query(covican_transformed,
 new_example <- example
 new_example$queries <- new_example$queries[c(1:5, 10:11),] # We take only some of the previously created queries
 new_example$queries[nrow(new_example$queries)+1,] <- c("100-79", "Hospital 11", "Baseline visit", "Comorbidities", "copd", "-", "Chronic obstructive pulmonary disease", "The value is NA and it should not be missing", "100-79-4") # we create a new query
+new_example$queries[nrow(new_example$queries)+1,] <- c("105-56", "Hospital 5", "Baseline visit", "Demographics", "age", "-", "Age", "The value is 80 and it should not be >70", "105-56-2")
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 check <- check_queries(old = example$queries, 
@@ -346,6 +346,7 @@ check <- check_queries(old = example$queries,
 check$results
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-example <- rbind(head(check$queries, 4), check$queries %>% dplyr::filter(Modification == "Modified") %>% dplyr::filter(row_number()==1))
+example <- rbind(head(check$queries, 4), 
+                 check$queries %>% dplyr::filter(Modification == "Modified") %>% dplyr::filter(row_number()==1))
 kable(example) %>% kableExtra::row_spec(0,bold=TRUE) %>% kableExtra::kable_styling()
 
