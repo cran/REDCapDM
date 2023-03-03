@@ -43,16 +43,16 @@ kable(vars) %>%
   kableExtra::kable_styling(full_width = F)
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  dataset <- redcap_data(data_path="C:/Users/username/example.r",
-#                         dic_path="C:/Users/username/example_dictionary.csv")
+#  dataset <- redcap_data(data_path = "C:/Users/username/example.r",
+#                         dic_path = "C:/Users/username/example_dictionary.csv")
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  dataset <- redcap_data(data_path="C:/Users/username/example.r",
-#                         dic_path="C:/Users/username/example_dictionary.csv",
-#                         event_path="C:/Users/username/events.csv")
+#  dataset <- redcap_data(data_path = "C:/Users/username/example.r",
+#                         dic_path = "C:/Users/username/example_dictionary.csv",
+#                         event_path = "C:/Users/username/events.csv")
 
 ## ----eval=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-#  dataset_api <- redcap_data(uri ="https://redcap.idibell.cat/api/",
+#  dataset_api <- redcap_data(uri = "https://redcap.idibell.cat/api/",
 #                             token = "55E5C3D1E83213ADA2182A4BFDEA")
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
@@ -159,8 +159,8 @@ table(data2$type_underlying_disease_haematological_cancer)
 
 ## ----message=FALSE, warning=FALSE, include=FALSE------------------------------
 example <- rd_query(covican_transformed,
-                    variables = c("copd"),
-                    expression = c("%in%NA"),
+                    variables = "copd",
+                    expression = "%in%NA",
                     event = "baseline_visit_arm_1")
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
@@ -303,6 +303,26 @@ example <- rd_query(covican_transformed,
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 # Printing results
 example$results$`Hospital 2`
+
+## ----echo=FALSE, message=FALSE, warning=FALSE---------------------------------
+knitr::include_graphics("files/ProjectHome.png")
+
+## ----echo=FALSE, message=FALSE, warning=FALSE---------------------------------
+knitr::include_graphics("files/EventsID.png", dpi = 150)
+
+## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+example <- rd_query(covican_transformed,
+                    variables = "age",
+                    expression = ">89",
+                    event = "baseline_visit_arm_1",
+                    link = list(domain = "redcappre.idibell.cat",
+                                redcap_version = "13.1.9",
+                                proj_id = 800,
+                                event_id = c("baseline_visit_arm_1" = 811, "follow_up_visit_da_arm_1" = 812)))
+
+## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+# Printing results
+example$queries$Link
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 example <- rd_event(covican_transformed,
