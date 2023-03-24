@@ -5,6 +5,7 @@ library(kableExtra)
 library(knitr)
 library(dplyr)
 library(Hmisc)
+library(purrr)
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 data(covican)
@@ -97,13 +98,11 @@ dataset <- rd_transform(covican,
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 dataset <- rd_transform(covican,
-                        exclude_to_factor = "dm")
+                        exclude_recalc = "age")
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 dataset <- rd_transform(covican,
-                        keep_labels = TRUE)
-
-str(dataset$data[,1:2])
+                        exclude_to_factor = "dm")
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 dataset <- rd_transform(covican,
@@ -369,4 +368,20 @@ check$results
 example <- rbind(head(check$queries, 4), 
                  check$queries %>% dplyr::filter(Modification == "Modified") %>% dplyr::filter(row_number()==1))
 kable(example) %>% kableExtra::row_spec(0,bold=TRUE) %>% kableExtra::kable_styling()
+
+## ----message=FALSE, warning=FALSE, comment=NA, include=FALSE------------------
+example <- rd_query(covican_transformed,
+                    variables = c("copd", "age"),
+                    expression = c("%in%NA", "%in%NA"),
+                    event = "baseline_visit_arm_1")
+
+## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
+#  rd_export(example)
+
+## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
+#  rd_export(queries = example$queries,
+#            column = "Link",
+#            sheet_name = "Queries - Proyecto",
+#            path = "C:/User/Desktop/queries.xlsx",
+#            password = "123")
 
