@@ -4,7 +4,7 @@ library(REDCapDM)
 library(kableExtra)
 library(knitr)
 library(dplyr)
-library(Hmisc)
+library(magrittr)
 library(purrr)
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
@@ -75,7 +75,7 @@ dataset <- rd_transform(covican,
 #To print the results
 dataset$results
 
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
 dataset$data
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
@@ -85,7 +85,7 @@ dataset <- rd_transform(covican,
 #To print the results
 dataset$results
 
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
 dataset$data
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
@@ -123,7 +123,7 @@ data <- dataset$data
 
 names(data)
 
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
 dataset <- rd_transform(covican,
                         final_format = "by_form",
                         which_form = "laboratory_findings",
