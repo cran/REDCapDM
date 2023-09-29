@@ -1,9 +1,10 @@
-#' REDCapDM: A package to create query reports on a given REDCap dataset.
-#'
+#' @docType package
+#' @name REDCapDM-package
+#' @aliases REDCapDM
+#' @title Managing REDCap Data: The R package REDCapDM
 #' @description
-#' The REDCapDM package provides three main functions that allow us to read a dataset exported from REDCap, to perform a pre-processing of the data, to identify a set of queries and to check, over time, which of the old queries have been resolved. This package has been built and tested on databases created with REDCap v12.4.17.
+#' The REDCapDM package facilitates the importing of data from REDCap into R through either an API connection or directly from exported files. It encompasses various functions dedicated to data processing and transformation, aiding in the generation and administration of queries to address any discrepancies or uncertainties encountered within the dataset.
 #'
-#' @details
 #' REDCapDM functions:
 #'
 #' - redcap_data: used to read data exported from REDCap or through an API connection.
@@ -22,6 +23,12 @@
 #'
 #' - rd_export: used to export all identified queries into a xlsx file.
 #'
-#' @docType package
-#' @name REDCapDM
+#' @examples
+#' \dontrun{
+#' # Install REDCapDM from CRAN:
+#' install.packages('REDCapR')
+#'
+#' # Install REDCapDM from GitHub:
+#' remotes::install_github('ubidi/REDCapDM')
+#' }
 NULL

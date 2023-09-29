@@ -40,7 +40,7 @@ vars <- data.frame("Name" = names(covican$data %>% dplyr::select(record_id:acute
                    "Categories" = descr[seq(2, length(descr), 2)])
 
 kable(vars) %>% 
-  kableExtra::row_spec(0,bold=TRUE) %>% 
+  kableExtra::row_spec(0, bold=TRUE) %>% 
   kableExtra::kable_styling(full_width = F)
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
@@ -159,8 +159,7 @@ table(data2$type_underlying_disease_haematological_cancer)
 ## ----message=FALSE, warning=FALSE, include=FALSE------------------------------
 example <- rd_query(covican_transformed,
                     variables = "copd",
-                    expression = "is.na(x)",
-                    event = "baseline_visit_arm_1")
+                    expression = "is.na(x)")
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
 kable(head(example$queries)) %>% 

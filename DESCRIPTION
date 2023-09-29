@@ -1,7 +1,7 @@
 Package: REDCapDM
 Type: Package
 Title: 'REDCap' Data Management
-Version: 0.7.0
+Version: 0.8.0
 Authors@R: c(
     person("João", "Carmezim", email = "jcarmezim@igtp.cat", role = c("aut", "cre")),
     person("Judith", "Peñafiel", role = c("aut")),
@@ -24,7 +24,7 @@ VignetteBuilder: knitr
 Depends: R (>= 2.10)
 LazyData: true
 NeedsCompilation: no
-Packaged: 2023-06-02 12:02:01 UTC; jcarmezim
+Packaged: 2023-09-29 09:34:12 UTC; jcarmezim
 Author: João Carmezim [aut, cre],
   Judith Peñafiel [aut],
   Pau Satorra [aut],
@@ -32,4 +32,4 @@ Author: João Carmezim [aut, cre],
   Natàlia Pallarés [aut],
   Cristian Tebé [aut]
 Repository: CRAN
-Date/Publication: 2023-06-02 14:00:02 UTC
+Date/Publication: 2023-09-29 11:00:02 UTC
