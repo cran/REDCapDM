@@ -1,11 +1,11 @@
 Package: REDCapDM
 Type: Package
 Title: 'REDCap' Data Management
-Version: 0.8.0
+Version: 0.8.5
 Authors@R: c(
     person("João", "Carmezim", email = "jcarmezim@igtp.cat", role = c("aut", "cre")),
-    person("Judith", "Peñafiel", role = c("aut")),
     person("Pau", "Satorra", role = c("aut")),
+    person("Judith", "Peñafiel", role = c("aut")),
     person("Esther", "García", role = c("aut")),
     person("Natàlia", "Pallarés", role = c("aut")),
     person("Cristian", "Tebé", role = c("aut"))
@@ -18,18 +18,19 @@ BugReports: https://github.com/ubidi/REDCapDM/issues
 Encoding: UTF-8
 RoxygenNote: 7.2.3
 Imports: dplyr, janitor, magrittr, openxlsx, purrr, REDCapR, rlang,
-        stringr, tibble, tidyr, tidyselect, utils, stringi, labelled
+        stringr, tibble, tidyr, tidyselect, utils, stringi, labelled,
+        cli
 Suggests: knitr, rmarkdown, kableExtra
 VignetteBuilder: knitr
 Depends: R (>= 2.10)
 LazyData: true
 NeedsCompilation: no
-Packaged: 2023-09-29 09:34:12 UTC; jcarmezim
+Packaged: 2023-12-05 07:18:19 UTC; jcarmezim
 Author: João Carmezim [aut, cre],
-  Judith Peñafiel [aut],
   Pau Satorra [aut],
+  Judith Peñafiel [aut],
   Esther García [aut],
   Natàlia Pallarés [aut],
   Cristian Tebé [aut]
 Repository: CRAN
-Date/Publication: 2023-09-29 11:00:02 UTC
+Date/Publication: 2023-12-05 15:40:08 UTC

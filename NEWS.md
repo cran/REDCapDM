@@ -1,3 +1,9 @@
+# REDCapDM 0.8-5
+
+## Bug fixes
+
+- Fixed a major error when importing data through an API connection.
+
 # REDCapDM 0.8-0
 
 ## Changes to functions

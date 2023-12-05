@@ -1,8 +1,8 @@
-b43f19c978eebbe0046472f3fb24f303 *DESCRIPTION
+c346390a9a36830a727e0cf2d2e23b03 *DESCRIPTION
 1dc4eee40d8a9835327431d4aca0836c *LICENSE
-3c81a26d0495482f0f9eb68a1fdaa79b *NAMESPACE
-bdea54a235056bb301da70a248699efb *NEWS.md
-5fe61ab035f65cac6a04b441ad0282c1 *R/REDCapDM-package.R
+8b2cd1f0e6d3ef57f5a673e8d39e45af *NAMESPACE
+e9f17b0f8836ab59d8b3a15731dd72ea *NEWS.md
+1307f07bdf50505879cceeaff6b5d091 *R/REDCapDM-package.R
 5a6cdc851db03ca18f3cc27e1dd64c27 *R/check_queries.R
 ac15ea45c643477f8f4b6adf76d86daa *R/covican.R
 5159e3100dcfe3fae76e110d1deb0c4e *R/rd_event.R
@@ -11,9 +11,11 @@ ac15ea45c643477f8f4b6adf76d86daa *R/covican.R
 a3a419d672cb690cc124e3b76d41168d *R/rd_query.R
 e1564795142542a9a02140bbae586566 *R/rd_rlogic.R
 1411876426fa0aff1f6de1ff22620443 *R/rd_transform.R
-4518d26106aabaa7495e2c4c8a356296 *R/redcap_data.R
+10da08b2af8efbfe2a213c244fbc6017 *R/redcap_data.R
+6cc54cd46ad5a0b38d05ad4a12f3f8f9 *R/suplementary_package.R
 b56ff2b193ecba52f9ec7f3b10cca008 *R/utils-pipe.R
 36b8c4c10879e36b0cbec64b6e4f7152 *R/utils-transform.R
+36a97383badc29c67f15b6dcab4a18ad *R/zzz.R
 01a19e22da24484f1cb18eef248db9c3 *build/vignette.rds
 478e987a613cd7a90dc2025041f55912 *data/covican.rda
 9a7c595bd4a2cf720f40b8238ab9c151 *inst/doc/Data-reading-and-processing.R
@@ -25,7 +27,7 @@ eab473644e1d7b4fbd90e08b348dd559 *inst/doc/Queries.R
 a2f0d804a0f9026ac5a512dd00e797f0 *inst/doc/REDCapDM.R
 4cddd8b5666b1cb33c0ef4ddf5e22dd6 *inst/doc/REDCapDM.Rmd
 789d67211ce564487fedf229798c437f *inst/doc/REDCapDM.html
-e55416f3dc44c332b2c246fdf1f2e0ef *man/REDCapDM-package.Rd
+50d7c8095853fec7d6dd5a92a0ad590a *man/REDCapDM-package.Rd
 55e4acf77d9ad07465500fc405811f62 *man/check_queries.Rd
 37f97b2d96603ddc41ddaf3535257f53 *man/checkbox_names.Rd
 83f9914c40d86103e98c8cb3df5a696d *man/covican.Rd
