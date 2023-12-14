@@ -1,7 +1,7 @@
-c346390a9a36830a727e0cf2d2e23b03 *DESCRIPTION
+75238a649908f817a002d7d4378cdee9 *DESCRIPTION
 1dc4eee40d8a9835327431d4aca0836c *LICENSE
 8b2cd1f0e6d3ef57f5a673e8d39e45af *NAMESPACE
-e9f17b0f8836ab59d8b3a15731dd72ea *NEWS.md
+1f942f64bf947bc4ab1f0fc2cc2ff0b3 *NEWS.md
 1307f07bdf50505879cceeaff6b5d091 *R/REDCapDM-package.R
 5a6cdc851db03ca18f3cc27e1dd64c27 *R/check_queries.R
 ac15ea45c643477f8f4b6adf76d86daa *R/covican.R
@@ -10,8 +10,8 @@ ac15ea45c643477f8f4b6adf76d86daa *R/covican.R
 514606ad0809818946eca33c27d00b63 *R/rd_insert_na.R
 a3a419d672cb690cc124e3b76d41168d *R/rd_query.R
 e1564795142542a9a02140bbae586566 *R/rd_rlogic.R
-1411876426fa0aff1f6de1ff22620443 *R/rd_transform.R
-10da08b2af8efbfe2a213c244fbc6017 *R/redcap_data.R
+252d2558589628dbb21a135013da0f88 *R/rd_transform.R
+46591112f6cfb268dcd9a0816ed010ba *R/redcap_data.R
 6cc54cd46ad5a0b38d05ad4a12f3f8f9 *R/suplementary_package.R
 b56ff2b193ecba52f9ec7f3b10cca008 *R/utils-pipe.R
 36b8c4c10879e36b0cbec64b6e4f7152 *R/utils-transform.R
@@ -42,7 +42,7 @@ dfffc3447b45c5053315b394fa235aad *man/rd_query.Rd
 b5d6f7a61816c625f088faeb225673e0 *man/rd_rlogic.Rd
 2d43d82ae801d688f719ab901ab6772c *man/rd_transform.Rd
 27c039f320a7266d3d6c94536c457d05 *man/recalculate.Rd
-3f3bd4c9cca52d9aef266a8cc0dc7bbd *man/redcap_data.Rd
+6fb50c5784d7ecb54aa4178095708d18 *man/redcap_data.Rd
 b971b5b6ed367f8720b479e91bb2483a *man/split_event.Rd
 42b3d05153de977358667fe23e2887e6 *man/split_form.Rd
 24e341fdc3f94743a0d4569c0d4c20a8 *man/to_factor.Rd
