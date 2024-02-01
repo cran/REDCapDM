@@ -1,4 +1,3 @@
-#' @docType package
 #' @name REDCapDM-package
 #' @keywords internal
 #' @aliases REDCapDM
@@ -30,6 +29,6 @@
 #' install.packages('REDCapR')
 #'
 #' # Install REDCapDM from GitHub:
-#' remotes::install_github('ubidi/REDCapDM')
+#' remotes::install_github('bruigtp/REDCapDM')
 #' }
 NULL

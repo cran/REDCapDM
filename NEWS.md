@@ -1,3 +1,10 @@
+# REDCapDM 0.9-6
+
+## Changes 
+
+- Update of the links leading to the Github page.
+
+
 # REDCapDM 0.9-5
 
 ## Changes 
