@@ -1,3 +1,9 @@
+# REDCapDM 0.9-7
+
+## Bug fixes
+
+- Error in _redcap_data()_ function while using the API connection to import data. [Solves Issue #4 in github]
+
 # REDCapDM 0.9-6
 
 ## Changes 
