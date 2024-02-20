@@ -106,7 +106,11 @@ dataset <- rd_transform(covican,
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 dataset <- rd_transform(covican,
-                        delete_vars = c("inc_", "exc_"))
+                        delete_vars = "d_birth")
+
+## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+dataset <- rd_transform(covican,
+                        delete_pattern = c("inc_", "exc_"))
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 dataset <- rd_transform(covican,
