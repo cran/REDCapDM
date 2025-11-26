@@ -4,10 +4,18 @@ library(REDCapDM)
 library(kableExtra)
 library(knitr)
 library(dplyr)
-library(magrittr)
 library(purrr)
 
+## ----eval=FALSE---------------------------------------------------------------
+# install.packages("REDCapDM")
+
+## ----eval=FALSE---------------------------------------------------------------
+# install.packages("remotes") # Run this line if the 'remotes' package isn't installed already.
+# remotes::install_github("bruigtp/REDCapDM")
+
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+library(REDCapDM)
+
 data(covican)
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
@@ -35,130 +43,185 @@ descr <- c("Identifier of each record", "",
            "Indicator of leukemia or lymphoma", "No ; Yes",
            "Indicator of acute leukemia", "No ; Yes")
 
-vars <- data.frame("Name" = names(covican$data %>% dplyr::select(record_id:acute_leuk)),
+vars <- data.frame("Name" = names(covican$data |> dplyr::select(record_id:acute_leuk)),
                    "Description" = descr[seq(1, length(descr), 2)],
                    "Categories" = descr[seq(2, length(descr), 2)])
 
-kable(vars) %>% 
-  kableExtra::row_spec(0, bold=TRUE) %>% 
+kable(vars) |> 
+  kableExtra::row_spec(0, bold=TRUE) |> 
   kableExtra::kable_styling(full_width = F)
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  dataset <- redcap_data(data_path = "C:/Users/username/example.r",
-#                         dic_path = "C:/Users/username/example_dictionary.csv")
+# dataset <- redcap_data(data_path = "C:/Users/username/example.r",
+#                        dic_path = "C:/Users/username/example_dictionary.csv")
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  dataset <- redcap_data(data_path = "C:/Users/username/example.r",
-#                         dic_path = "C:/Users/username/example_dictionary.csv",
-#                         event_path = "C:/Users/username/events.csv")
+# dataset <- redcap_data(data_path = "C:/Users/username/example.r",
+#                        dic_path = "C:/Users/username/example_dictionary.csv",
+#                        event_path = "C:/Users/username/events.csv")
 
 ## ----eval=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-#  dataset_api <- redcap_data(uri = "https://redcap.idibell.cat/api/",
-#                             token = "55E5C3D1E83213ADA2182A4BFDEA")
+# dataset_api <- redcap_data(uri = "https://redcap.idibell.cat/api/",
+#                            token = "55E5C3D1E83213ADA2182A4BFDEA")
 
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-#Option A: list object 
-covican_transformed <- rd_transform(covican)
+## ----message=FALSE, warning=FALSE, eval = FALSE, comment="#>", collapse = TRUE----
+# data |>
+#     rd_delete_vars(delete_pattern = c("_complete", "_timestamp") |>
+#     rd_dates() |>
+#     rd_recalculate() |>
+#     rd_checkbox() |>
+#     rd_factor() |>
+#     rd_dictionary() |>
+#     rd_split(by = "event") # use "form" if not longitudinal
 
-#Option B: separately with different arguments
-covican_transformed <- rd_transform(data = covican$data, 
-                                    dic = covican$dictionary, 
-                                    event_form = covican$event_form)
+## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
+covican_transformed <- covican |> 
+    rd_recalculate() |> 
+    rd_checkbox() |> 
+    rd_factor() |> 
+    rd_dictionary() |> 
+    rd_split(by = "event") 
 
-#Print the results of the transformation
 covican_transformed$results
 
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        final_format = "by_event")
+## -----------------------------------------------------------------------------
+# Option A: delete by variable name
+covican_deleted <- covican |> 
+  rd_delete_vars(vars = c("potassium", "leuk_lymph"))
 
-#To print the results
-dataset$results
-
-## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
-dataset$data
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        final_format = "by_form")
-
-#To print the results
-dataset$results
+# Option B: delete by regex pattern
+covican_deleted <- covican |> 
+  rd_delete_vars(pattern = c("_complete$", "_timestamp$"))
 
 ## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
-dataset$data
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        checkbox_labels = c("N", "Y"))
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        checkbox_na = TRUE)
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        exclude_recalc = "age")
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        exclude_to_factor = "dm")
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        delete_vars = "d_birth")
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        delete_pattern = c("inc_", "exc_"))
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-dataset <- rd_transform(covican,
-                        final_format = "by_event",
-                        which_event = "baseline_visit_arm_1")
-
-## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-
-dataset <- rd_transform(covican,
-                        final_format = "by_form",
-                        which_form = "demographics")
-
-data <- dataset$data
-
-names(data)
+covican_dates <- covican |> 
+  rd_dates()
 
 ## ----message=FALSE, warning=FALSE, comment="#>", collapse = TRUE--------------
-dataset <- rd_transform(covican,
-                        final_format = "by_form",
-                        which_form = "laboratory_findings",
-                        wide = TRUE)
+# Simulate a character date since covican already has the dates in the correct format
+covican_dates <- covican
+covican_dates$data <- covican_dates$data |> 
+  dplyr::mutate(d_birth = as.character(d_birth))
+# Check class before conversion
 
-head(dataset$data)
+class(covican_dates$data$d_birth)
+
+# Check class after conversion
+covican_dates <- covican_dates |> 
+  rd_dates()
+class(covican_dates$data$d_birth)
+
+## -----------------------------------------------------------------------------
+covican_recalc <- covican |> 
+  rd_recalculate()
+
+# Print recalculation results
+covican_recalc$results
+
+## -----------------------------------------------------------------------------
+# Exclude specific variables from recalculation
+covican_recalc <- covican |> 
+  rd_recalculate(exclude = c("screening_fail_crit", "resp_rate"))
+
+covican_recalc$results
+
+## -----------------------------------------------------------------------------
+# Default transformation: "No"/"Yes" labels & renamed variables
+cb <- covican |> 
+  rd_checkbox()
+
+str(cb$data$underlying_disease_hemato_acute_myeloid_leukemia)
+
+## -----------------------------------------------------------------------------
+# use the argument checkbox_names to choose the final format of the variable names
+cb <- covican |> 
+  rd_checkbox(checkbox_names = FALSE)
+
+str(cb$data$underlying_disease_hemato___1)
+
+## -----------------------------------------------------------------------------
+cb <- covican |> 
+  rd_checkbox(na_logic = "eval")
+
+## -----------------------------------------------------------------------------
+cb <- covican |> 
+  rd_checkbox(checkbox_labels = c("Absent", "Present"))
+
+str(cb$data$underlying_disease_hemato_acute_myeloid_leukemia)
+
+## -----------------------------------------------------------------------------
+factored <- covican |> 
+  rd_factor()
+
+# Checking class of the variable
+str(factored$data$available_analytics)
+
+## -----------------------------------------------------------------------------
+factored <- covican |> 
+  rd_factor(exclude = c("available_analytics", "urine_culture"))
+
+# Checking class of both versions of the variable
+str(covican$data$available_analytics)
+str(covican$data$available_analytics.factor)
+
+## -----------------------------------------------------------------------------
+# Update dictionary after cleaning
+dict_result <- covican |>
+  rd_factor() |>
+  rd_checkbox() |>
+  rd_dictionary()
+
+## -----------------------------------------------------------------------------
+forms_data <- covican |>
+  rd_split(by = "form")
+
+forms_data$data
+
+## -----------------------------------------------------------------------------
+forms_data <- covican |>
+  rd_split(by = "form", wide = TRUE)
+
+## -----------------------------------------------------------------------------
+events_data <- covican |>
+  rd_split(by = "event")
+
+events_data$data
+
+## -----------------------------------------------------------------------------
+# Example by form
+baseline_data <- covican |>
+  rd_split(by = "form", which = "demographics")
+
+head(baseline_data$data)
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-logic_trans <- rd_rlogic(covican,
-                         logic = "if([exc_1]='1' or [inc_1]='0' or [inc_2]='0' or [inc_3]='0',1,0)",
-                         var = "screening_fail_crit")
+cb <- covican |> 
+  rd_checkbox()
+
+#Before inserting missings
+table(cb$data$type_underlying_disease_haematological_cancer)
+
+#Run with this function
+cb2 <- covican |> 
+  rd_checkbox() |> 
+  rd_insert_na(vars = "type_underlying_disease_haematological_cancer",
+               filter = "age < 65")
+
+#After inserting missings
+table(cb2$data$type_underlying_disease_haematological_cancer)
+
+## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
+logic_trans <- covican |> 
+  rd_rlogic(logic = "if([exc_1]='1' or [inc_1]='0' or [inc_2]='0' or [inc_3]='0',1,0)",
+            var = "screening_fail_crit")
 
 str(logic_trans)
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
-#Raw transformation of the data:
-dataset <- rd_transform(covican)
+covican_transformed <- rd_transform(covican)
 
-data <- dataset$data
-
-#Before inserting missings
-table(data$type_underlying_disease_haematological_cancer)
-
-#Run the function
-data2 <- rd_insert_na(dataset,
-                      event_form = covican$event_form,
-                      vars = "type_underlying_disease_haematological_cancer",
-                      filter = "age < 65")
-
-#After inserting missings
-table(data2$type_underlying_disease_haematological_cancer)
+#Print the results of the transformation
+covican_transformed$results
 
 ## ----message=FALSE, warning=FALSE, include=FALSE------------------------------
 example <- rd_query(covican_transformed,
@@ -166,8 +229,8 @@ example <- rd_query(covican_transformed,
                     expression = "is.na(x)")
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-kable(head(example$queries)) %>% 
-  kableExtra::row_spec(0, bold = TRUE) %>% 
+kable(head(example$queries)) |> 
+  kableExtra::row_spec(0, bold = TRUE) |> 
   kableExtra::kable_styling()
 
 example$results
@@ -268,7 +331,7 @@ example<- rd_query(covican_transformed,
                    event = "baseline_visit_arm_1")
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
-kable(example$queries[1,]) %>% kableExtra::row_spec(0,bold=TRUE) %>% kableExtra::kable_styling()
+kable(example$queries[1,]) |> kableExtra::row_spec(0,bold=TRUE) |> kableExtra::kable_styling()
 
 ## ----message=FALSE, warning=FALSE, comment=NA---------------------------------
 example <- rd_query(covican_transformed,
@@ -385,8 +448,8 @@ check$results
 
 ## ----echo=FALSE, message=FALSE, warning=FALSE, comment=NA---------------------
 example <- rbind(head(check$queries, 4), 
-                 check$queries %>% dplyr::filter(Modification == "Modified") %>% dplyr::filter(row_number()==1))
-kable(example) %>% kableExtra::row_spec(0,bold=TRUE) %>% kableExtra::kable_styling()
+                 check$queries |> dplyr::filter(Modification == "Modified") |> dplyr::filter(row_number()==1))
+kable(example) |> kableExtra::row_spec(0,bold=TRUE) |> kableExtra::kable_styling()
 
 ## ----message=FALSE, warning=FALSE, comment=NA, include=FALSE------------------
 example <- rd_query(covican_transformed,
@@ -395,12 +458,12 @@ example <- rd_query(covican_transformed,
                     event = "baseline_visit_arm_1")
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  rd_export(example)
+# rd_export(example)
 
 ## ----message=FALSE, warning=FALSE, comment=NA, eval=FALSE---------------------
-#  rd_export(queries = example$queries,
-#            column = "Link",
-#            sheet_name = "Queries - Proyecto",
-#            path = "C:/User/Desktop/queries.xlsx",
-#            password = "123")
+# rd_export(queries = example$queries,
+#           column = "Link",
+#           sheet_name = "Queries - Proyecto",
+#           path = "C:/User/Desktop/queries.xlsx",
+#           password = "123")
 

@@ -2,19 +2,19 @@
 % Please edit documentation in R/rd_transform.R
 \name{rd_transform}
 \alias{rd_transform}
-\title{Transformation of the raw data}
+\title{Transformation of the Raw Data}
 \usage{
 rd_transform(
-  ...,
+  project = NULL,
   data = NULL,
   dic = NULL,
   event_form = NULL,
   checkbox_labels = c("No", "Yes"),
-  checkbox_na = FALSE,
+  na_logic = "none",
   exclude_recalc = NULL,
-  exclude_to_factor = NULL,
+  exclude_factor = NULL,
   delete_vars = NULL,
-  delete_pattern = c("_complete", "_timestamp"),
+  delete_pattern = NULL,
   final_format = "raw",
   which_event = NULL,
   which_form = NULL,
@@ -22,45 +22,60 @@ rd_transform(
 )
 }
 \arguments{
-\item{...}{Output of the function `redcap_data`, that is a list containing the data frames of the data, he dictionary and the event_form (if it's needed) of the REDCap project.}
+\item{project}{A list containing the REDCap data, dictionary, and event mapping (expected \code{redcap_data()} output). Overrides \code{data}, \code{dic}, and \code{event_form}.}
 
-\item{data}{Data frame containing the data read from REDCap. If the list is specified this argument is not necessary.}
+\item{data}{A \code{data.frame} or \code{tibble} with the REDCap dataset.}
 
-\item{dic}{Data frame  containing the dictionary read from REDCap. If the list is specified this argument is not necessary.}
+\item{dic}{A \code{data.frame} with the REDCap dictionary.}
 
-\item{event_form}{Data frame containing the correspondence of each event with each form. If the list is specified this argument is not necessary.}
+\item{event_form}{Only applicable for longitudinal projects (presence of events). Event-to-form mapping for longitudinal projects.}
 
-\item{checkbox_labels}{Character vector with the names that will have the two options of every checkbox variable. Default is `c('No', 'Yes')`.}
+\item{checkbox_labels}{Character vector of length 2 for labels of unchecked/checked values. Default: \code{c("No", "Yes")}.}
 
-\item{checkbox_na}{Logical indicating if values of checkboxes that have a branching logic have to set to missing only when the branching logic is missing (if set to false) or also when the branching logic isn't satisfied (if set to true). The default is false.}
+\item{na_logic}{Controls how missing values are set based on the branching logic of a checkbox. Must be one of \code{"none"} (do nothing), \code{"missing"} (set to \code{NA} only when the logic evaluation is \code{NA}), or \code{"eval"} (set to \code{NA} when the logic evaluates to \code{FALSE}). Defaults to \code{"none"}.}
 
-\item{exclude_recalc}{Character vector with the names of the variables that do not have to be recalculated. Might be useful for projects were there are some calculated fields that have a time consuming recalculation.}
+\item{exclude_recalc}{Optional. Character vector of field names to exclude from recalculation.}
 
-\item{exclude_to_factor}{Character vector with the names of the variables that do not have to be transformed to factors.}
+\item{exclude_factor}{Optional character vector of variable names (use original names \strong{without} the \code{.factor} suffix) to exclude from conversion.}
 
-\item{delete_vars}{Character vector specifying the variables to exclude.}
+\item{delete_vars}{Optional. A character vector of variable names to remove from both the dataset and dictionary.}
 
-\item{delete_pattern}{Character vector specifying the regex pattern that will contain the variables to exclude. By default, variables ending up with `_complete` and `_timestamp` will be removed.}
+\item{delete_pattern}{Optional. A character vector of regular expression patterns. Variables matching these patterns will be removed from the dataset and dictionary.}
 
-\item{final_format}{Character string indicating the final arrangement format of the data that the function will return. Choose one of `raw`, `by_event` or `by_form`. `raw` (default) will return the transformed data with the original structure. `by_event` will return the transformed data as a nested data frame by event. `by_form` will return the transformed data as a nested data frame by form.}
+\item{final_format}{Character string indicating the final format of the data. Options are \code{raw}, \code{by_event} or \code{by_form}. \code{raw} (default) returns the transformed data in its original structure, \code{by_event} returns it as a nested data frame by event, and \code{by_form} returns it as a nested data frame by form.}
 
-\item{which_event}{Character string indicating if only one event has to be returned if the final format selected is `by_event`.}
+\item{which_event}{Character. If \code{final_format = "by_event"}, return only this event.}
 
-\item{which_form}{Character string indicating if only one form has to be returned if the final format selected is `by_form`.}
+\item{which_form}{Character. If \code{final_format = "by_form"}, return only this form.}
 
-\item{wide}{Logical indicating if the data split by form (if selected) has to be in a wide format or in a long one.}
+\item{wide}{Logical. If \code{TRUE} (for form-based splits), repeated instances are returned in wide format. Defaults to \code{FALSE}.}
 }
 \value{
-List with the transformed dataset, dictionary, event_form and the results
+A list with elements:
+\describe{
+\item{data}{Transformed data (data.frame or nested list when split).}
+\item{dictionary}{Updated dictionary data.frame.}
+\item{event_form}{Event–form mapping (if applicable).}
+\item{results}{Character summary of transformation steps performed.}
+}
 }
 \description{
-Function that transforms the raw data from REDCap read by the function `redcap_data`. It returns the transformed data and dictionary along with the summary of the results of each step.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
+
+Transforms the raw REDCap data read by the \code{redcap_data} function. The function runs in one-step pipeline all functions dedicated to processing the data and returns the transformed data and dictionary, along with a summary of each step done.
 }
 \examples{
-rd_transform(covican)
+# Minimal usage (project object or data + dictionary)
+trans <- rd_transform(covican)
 
-# For customization of checkbox labels
-rd_transform(covican,
-             checkbox_labels = c("Not present", "Present"))
+# Custom checkbox labels
+trans <- rd_transform(covican,
+                      checkbox_labels = c("Not present", "Present"))
+
+# Return only a single form (wide)
+trans <- rd_transform(covican,
+                      final_format = "by_form",
+                      which_form = "laboratory_findings",
+                      wide = TRUE)
 
 }

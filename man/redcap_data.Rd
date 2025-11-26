@@ -10,47 +10,81 @@ redcap_data(
   event_path = NA,
   uri = NA,
   token = NA,
-  filter_field = NA
+  filter_field = NULL,
+  survey_fields = FALSE
 )
 }
 \arguments{
-\item{data_path}{Character string with the pathname of the R file to read the dataset from.}
+\item{data_path}{Path to exported R file (use with \code{dic_path}).}
 
-\item{dic_path}{Character string with the pathname of the dictionary.}
+\item{dic_path}{Path to the dictionary file (CSV or XLSX; use with \code{data_path})..}
 
-\item{event_path}{Character string with the pathname of the file containing the correspondence between each event and each form (it can be downloaded through the `Designate Instruments for My Events` tab inside the `Project Setup` section of REDCap)}
+\item{event_path}{Path to the event-form mapping file (CSV or XLSX) for longitudinal projects (downloadable via the \verb{Designate Instruments for My Events} tab within the \verb{Project Setup} section of REDCap).}
 
-\item{uri}{The URI (Uniform Resource Identification) of the REDCap project.}
+\item{uri}{REDCap API base URI (use with \code{token}).}
 
-\item{token}{Character vector with the generated token.}
+\item{token}{REDCap API token (use with \code{uri}).}
 
-\item{filter_field}{Character vector with the fields of the REDCap project desired to import into R (API connection only)<.}
+\item{filter_field}{Optional character vector of field names to request from the API.}
+
+\item{survey_fields}{Logical; include survey-related fields when pulling via API. Default \code{FALSE}.}
 }
 \value{
-List containing the dataset and the dictionary of the REDCap project. If the event_path is specified, it will also contain a third element with the correspondence of the events & forms of the project.
+A list with:
+\itemize{
+\item \code{data}: Imported dataset.
+\item \code{dictionary}: Variable dictionary (project metadata).
+\item \code{event_form}: Event-form mapping for longitudinal projects (if applicable).
+}
 }
 \description{
-This function allows users to read datasets from a REDCap project into R for analysis, either via export of the data or via an API connection.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-The REDCap API is an interface that allows communication with REDCap and server without going through the interactive REDCap interface.
+Import REDCap data into R either from REDCap's exported R file or directly via the REDCap API. The function returns a list with the dataset, the project dictionary (metadata) and, for longitudinal projects, the instrument–event mapping (\code{event_form}) when available.
+}
+\details{
+Two import modes are supported:
+\itemize{
+\item \strong{Exported files} — use \code{data_path} (REDCap R export) and \code{dic_path} (dictionary CSV/XLSX).
+\item \strong{API} — use \code{uri} and \code{token} to pull data and metadata directly from REDCap.
+}
+
+If the project is longitudinal, provide \code{event_path} (instrument–event mapping)
+or the function will attempt to fetch it from the API when using API mode.
+
+\strong{Steps for using exported data in REDCap:}
+\enumerate{
+\item Use the REDCap \emph{Export Data} function and choose \emph{R Statistical Software} format.
+\item REDCap generates:
+\itemize{
+\item A CSV file with observations.
+\item An R script to format variables for import.
+}
+\item Ensure the exported files, dictionary, and event mapping (if any) are in the same directory.
+}
 }
 \note{
-If you will give further use to the package, we advise you to use the argument 'dic_path' to read your dictionary, as all other functions need it in order to run properly.
+To use other package functions effectively, include the \code{dic_path} argument to load the project dictionary.
 
-To read exported data, you must first use REDCap's 'Export Data' function and select the 'R Statistical Software' format. It will then generate a CSV file with all the observations and an R file with the necessary code to complete each variable's information.
+\itemize{
+\item Use either exported-files mode (\code{data_path} + \code{dic_path}) \strong{or} API mode (\code{uri} + \code{token}) — not both.
+\item For exported files, REDCap's R export is required for \code{data_path}. Dictionary and event files must be CSV or XLSX.
+}
 }
 \examples{
 \dontrun{
-# Exported files from REDCap
+# From exported files
+out <- redcap_data(
+  data_path = "project_export.r",
+  dic_path  = "project_dictionary.csv",
+  event_path = "instrument_event_map.csv"
+)
 
-dataset <- redcap_data(data_path = "C:/Users/username/example.r",
-                       dic_path = "C:/Users/username/example_dictionary.csv",
-                       event_path = "C:/Users/username/events.csv")
-
-# API connection
-
-dataset_api <- redcap_data(uri = "https://redcap.idibell.cat/api/",
-                           token = "55E5C3D1E83213ADA2182A4BFDEA") # This token is fictitious
-
+# From API
+out_api <- redcap_data(
+  uri   = "https://redcap.example.org/api/",
+  token = "REPLACE_WITH_TOKEN"
+)
 }
+
 }

@@ -2,10 +2,10 @@
 % Please edit documentation in R/rd_export.R
 \name{rd_export}
 \alias{rd_export}
-\title{Exporting the dataset of the queries}
+\title{Export Queries to an Excel File}
 \usage{
 rd_export(
-  ...,
+  project = NULL,
   queries = NULL,
   column = NULL,
   sheet_name = NULL,
@@ -14,21 +14,34 @@ rd_export(
 )
 }
 \arguments{
-\item{...}{List containing the data frame of queries. It may be the output of the `rd_query` or `rd_event` functions.}
+\item{project}{A list containing the dataframe of queries and results (expected \code{rd_query} or \code{rd_event} output). Overrides \code{queries}.}
 
-\item{queries}{Data frame containing the identified queries. If the list is given, this argument is not required.}
+\item{queries}{A data frame of identified queries.}
 
-\item{column}{Character element specifying the column containing the link of each query.}
+\item{column}{Name of the column containing URLs to convert into hyperlinks. If \code{NULL}, hyperlinks are added only if a \code{Link} column exists.}
 
-\item{sheet_name}{Character element specifying the sheet name of the resulting xlsx file.}
+\item{sheet_name}{Name of the Excel sheet in the resulting \code{.xlsx} file. Default: \code{"Sheet1"}.}
 
-\item{path}{Character element specifying the file path to save the xlsx file. If `NULL`, the file is created in the current working directory.}
+\item{path}{File path for saving the \code{.xlsx} file. If \code{NULL}, the file is saved as \code{"example.xlsx"} in the working directory.}
 
-\item{password}{String with the password to protect the worksheet and prevent others from making changes.}
+\item{password}{Optional password to protect the worksheet from edits.}
 }
 \value{
-An xlsx file containing all the queries and, if available, hyperlinks to each one of them.
+An \code{.xlsx} file written to the specified path.
 }
 \description{
-This function allows you to export the previously identified queries to an xlsx file.
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+
+Export a query dataset (e.g., from \code{rd_query} or \code{rd_event}) to an \code{.xlsx} file. The function can optionally convert a column of URLs into Excel hyperlinks and apply password protection to the worksheet.
+}
+\examples{
+\dontrun{
+rd_export(
+  queries = my_queries,
+  column = "Link",
+  sheet_name = "My Queries",
+  path = "queries.xlsx"
+)
+}
+
 }
