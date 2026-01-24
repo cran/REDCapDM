@@ -1,3 +1,42 @@
+# REDCapDM 1.0-1
+
+## Bug fixes
+
+- Fixed a bug in `rd_checkbox` that mis-evaluated the branching logic of certain checkboxes if they had previously been transformed with `rd_factor`
+
+## New features
+
+-  Added a `sep` argument to the `redcap_data()` function, allowing users to specify the field separator when reading CSV dictionary files.
+
+# REDCapDM 1.0-0
+
+## Bug fixes
+
+- Addressed multiple bugs across various functions to enhance stability and reliability.
+
+- Improved error handling to provide clearer messages when issues arise.
+
+- Fixed inconsistencies in data transformation outputs for certain edge cases.
+
+## Changes & New features
+
+- The `rd_transform` function has been split into several smaller subprocess functions. This allows users to:
+
+    - Apply each transformation step independently.
+
+    - Inspect intermediate results at each stage.
+
+    - Have precise control over every change made to their data.
+
+- By exposing the individual steps as separate functions, users can now customize the data transformation pipeline to better fit their REDCap datasets.
+
+- Updated function descriptions and examples illustrate how to use the subprocesses effectively, making it easier to integrate REDCapDM into data management workflows.
+
+- Some older functions related to data transformation have now been deprecated. Users are encouraged to transition to the new subprocess functions for more flexibility and maintainability.
+
+<br>
+<br>
+
 # REDCapDM 0.9-9
 
 ## Bug fixes
