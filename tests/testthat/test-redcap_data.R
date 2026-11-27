@@ -38,7 +38,7 @@ test_that("Exported-files path: successful import returns data, dictionary and e
   tmp_event <- tempfile(fileext = ".csv")
   write.csv(event_form, tmp_event, row.names = FALSE, quote = FALSE)
 
-  out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic, event_path = tmp_event)
+  expect_warning(out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic, event_path = tmp_event), "not in the dictionary")
 
   expect_true(is.list(out))
   expect_true("data" %in% names(out))
@@ -117,6 +117,89 @@ test_that("Longitudinal project without event_path issues a warning", {
   expect_true("dictionary" %in% names(res))
 })
 
+test_that("a dictionary that is not encoded in UTF-8 (saved again with Excel as CSV) gives a clear error", {
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(data.frame(id = 1:2), tmp_r)
+  # Label with an accented letter in the Windows encoding (byte F3), as Excel saves a "CSV" file
+  tmp_dic <- tempfile(fileext = ".csv")
+  writeBin(c(charToRaw("field_name,form_name,field_type,field_label\nid,demographics,text,C"), as.raw(0xf3), charToRaw("digo\n")), tmp_dic)
+  expect_error(redcap_data(data_path = tmp_r, dic_path = tmp_dic), "not encoded in UTF-8", class = "REDCapDM_error_file")
+})
+
+test_that("the text of the dictionary has no spaces or line breaks at the beginning or at the end, as with the API", {
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(data.frame(id = 1:2), tmp_r)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = "id", form_name = "demographics", field_type = "text", field_annotation = " @HIDDEN\n"), tmp_dic, row.names = FALSE)
+  expect_equal(redcap_data(data_path = tmp_r, dic_path = tmp_dic)$dictionary$field_annotation, "@HIDDEN")
+})
+
+test_that("paths between quotes (copied with Copy as path in Windows) are read", {
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(data.frame(id = 1:2), tmp_r)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = "id", form_name = "demographics", field_type = "text"), tmp_dic, row.names = FALSE, quote = FALSE)
+  plain <- redcap_data(data_path = tmp_r, dic_path = tmp_dic)
+  expect_identical(redcap_data(data_path = paste0('"', tmp_r, '"'), dic_path = paste0('"', tmp_dic, '"')), plain)
+  expect_identical(redcap_data(data_path = paste0(" '", tmp_r, "' "), dic_path = tmp_dic), plain)
+})
+
+test_that("redcap_data reads the R script of a project that repeats events but not instruments", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  write.csv(data.frame(record_id = c(1, 1), redcap_event_name = "visit_arm_1", redcap_repeat_instrument = NA, redcap_repeat_instance = c(NA, 2), sex = c(1, 2)),
+    file.path(tmp_dir, "P_DATA.csv"), row.names = FALSE, na = "")
+  # As REDCap writes it: the options of the repeated instrument are c("", "") without names, which fails in R
+  writeLines(c(
+    "#Clear existing data and graphics", "rm(list=ls())", "data=read.csv('P_DATA.csv')",
+    "mapping_redcap_repeat_instrument = c(", "\t\"\",\"\"", ")",
+    "data$redcap_repeat_instrument.factor = factor(data$redcap_repeat_instrument, levels = names(mapping_redcap_repeat_instrument), labels = mapping_redcap_repeat_instrument)",
+    "mapping_sex = c(", "\t\"1\" = \"Male\",", "\t\"2\" = \"Female\"", ")",
+    "data$sex.factor = factor(data$sex, levels = names(mapping_sex), labels = mapping_sex)"
+  ), file.path(tmp_dir, "P_R.r"))
+  tmp_dic <- file.path(tmp_dir, "P_DataDictionary.csv")
+  write.csv(data.frame(field_name = c("record_id", "sex"), form_name = "f1", field_type = c("text", "radio")), tmp_dic, row.names = FALSE)
+
+  out <- suppressWarnings(redcap_data(data_path = file.path(tmp_dir, "P_R.r"), dic_path = tmp_dic))
+  expect_equal(nrow(out$data), 2)
+  # The repeated instrument is an empty factor, as with the API
+  expect_s3_class(out$data$redcap_repeat_instrument.factor, "factor")
+  expect_true(all(is.na(out$data$redcap_repeat_instrument.factor)))
+  # The other factors of the script are created as before
+  expect_equal(as.character(out$data$sex.factor), c("Male", "Female"))
+  expect_equal(levels(out$data$sex.factor), c("Male", "Female"))
+})
+
+test_that("the labels of the options that the R script of REDCap wrote without spaces take the label of the dictionary", {
+  tmp_dir <- tempfile()
+  dir.create(tmp_dir)
+  write.csv(data.frame(record_id = 1:4, dose = c("LOC", "HIC", "N", NA)), file.path(tmp_dir, "P_DATA.csv"), row.names = FALSE, na = "")
+  # As REDCap writes it when the labels have line breaks: the words are joined ("oralcorticosteroids(e.g.")
+  writeLines(c(
+    "#Clear existing data and graphics", "rm(list=ls())", "data=read.csv('P_DATA.csv')",
+    "mapping_dose = c(",
+    "\t\"HIC\" = \"high dose intravenouscorticosteroids(e.g. over 250mg)\",",
+    "\t\"LOC\" = \"low dose oralcorticosteroids(e.g. 5mg or less)\",",
+    "\t\"N\" = \"none\"",
+    ")",
+    "data$dose.factor = factor(data$dose, levels = names(mapping_dose), labels = mapping_dose)"
+  ), file.path(tmp_dir, "P_R.r"))
+  tmp_dic <- file.path(tmp_dir, "P_DataDictionary.csv")
+  write.csv(data.frame(
+    `Variable / Field Name` = c("record_id", "dose"), `Form Name` = "f1", `Field Type` = c("text", "dropdown"), `Field Label` = c("ID", "Dose"),
+    `Choices, Calculations, OR Slider Labels` = c("", "HIC, high dose intravenous corticosteroids (e.g. over 250mg) | LOC, low dose oral\u00a0corticosteroids (e.g. 5mg or less) | N, no corticosteroids"),
+    check.names = FALSE
+  ), tmp_dic, row.names = FALSE)
+
+  out <- redcap_data(data_path = file.path(tmp_dir, "P_R.r"), dic_path = tmp_dic)
+  # The labels that only lost their spaces take the label of the dictionary (as with the API), also with a non-breaking
+  # space (U+00A0) in the dictionary; "none" is a different label and is kept
+  low <- "low dose oral\u00a0corticosteroids (e.g. 5mg or less)"
+  expect_equal(levels(out$data$dose.factor), c("high dose intravenous corticosteroids (e.g. over 250mg)", low, "none"))
+  expect_equal(as.character(out$data$dose.factor), c(low, "high dose intravenous corticosteroids (e.g. over 250mg)", "none", NA))
+  expect_equal(as.vector(out$data$dose), c("LOC", "HIC", "N", NA))
+})
+
 test_that("Descriptive fields are removed from dictionary", {
   sample_data <- data.frame(id = 1:2)
   tmp_r <- tempfile(fileext = ".R")
@@ -138,7 +221,20 @@ test_that("Descriptive fields are removed from dictionary", {
 })
 
 
+test_that("API branch: REDCapR 1.2.0 or later is required (older versions only read the events of the first arm)", {
+  skip_if_not_installed("mockery")
+  required <- NULL
+  mockery::stub(redcap_data, "rlang::check_installed", function(pkg, reason = NULL, ..., version = NULL) {
+    required <<- c(pkg, version)
+    stop("REDCapR checked", call. = FALSE)
+  })
+  expect_error(redcap_data(uri = "https://api.example", token = "tok"), "REDCapR checked")
+  expect_equal(required, c("REDCapR", "1.2.0"))
+})
+
 test_that("API branch: SSL error in labels fetch is converted to helpful stop message", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   # Make a stub that raises an error with SSL phrase
   fake_ssl_error <- function(...) stop("SSL peer certificate: something went wrong", call. = FALSE)
 
@@ -151,8 +247,10 @@ test_that("API branch: SSL error in labels fetch is converted to helpful stop me
 })
 
 test_that("API branch: if labels retrieval returns zero rows a friendly error is thrown", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   empty_labels <- data.frame()  # zero-row data.frame
-  fake_read_empty_labels <- function(redcap_uri = NULL, token = NULL, verbose = FALSE, raw_or_label = "label", raw_or_label_headers = NULL, export_data_access_groups = NULL, export_survey_fields = NULL, fields = NULL) {
+  fake_read_empty_labels <- function(redcap_uri = NULL, token = NULL, verbose = FALSE, raw_or_label = "label", raw_or_label_headers = NULL, export_data_access_groups = NULL, export_survey_fields = NULL, fields = NULL, ...) {
     return(list(data = empty_labels))
   }
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read_empty_labels)
@@ -164,6 +262,8 @@ test_that("API branch: if labels retrieval returns zero rows a friendly error is
 })
 
 test_that("API branch: when event_path is provided it warns and attempts to read it", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   # Reuse fake functions that return minimal data (labels + raw) and metadata
   labels_df <- data.frame(record_id = 1L, stringsAsFactors = FALSE, check.names = FALSE)
   data_api <- data.frame(record_id = "1", stringsAsFactors = FALSE, check.names = FALSE)
@@ -176,7 +276,7 @@ test_that("API branch: when event_path is provided it warns and attempts to read
     check.names = FALSE
   )
 
-  fake_redcap_read2 <- function(redcap_uri = NULL, token = NULL, verbose = FALSE, raw_or_label = "raw", raw_or_label_headers = NULL, export_data_access_groups = NULL, export_survey_fields = NULL, fields = NULL) {
+  fake_redcap_read2 <- function(redcap_uri = NULL, token = NULL, verbose = FALSE, raw_or_label = "raw", raw_or_label_headers = NULL, export_data_access_groups = NULL, export_survey_fields = NULL, fields = NULL, ...) {
     if (identical(raw_or_label, "label")) return(list(data = labels_df))
     if (identical(raw_or_label, "raw")) return(list(data = data_api))
     stop("unexpected")
@@ -185,6 +285,7 @@ test_that("API branch: when event_path is provided it warns and attempts to read
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_redcap_read2)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_redcap_metadata_read2)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
 
   # create a valid event CSV (not the events export)
   event_form <- data.frame(form = "form1", stringsAsFactors = FALSE)
@@ -193,7 +294,7 @@ test_that("API branch: when event_path is provided it warns and attempts to read
 
   expect_warning(
     out <- redcap_data(uri = "https://api.example", token = "tok", event_path = tmp_event),
-    "The event_path argument is not required when using an API connection."
+    "argument is not required when using an API connection"
   )
 
   expect_true("event_form" %in% names(out))
@@ -250,7 +351,7 @@ test_that("Empty strings are converted to NA in character columns", {
   tmp_dic <- tempfile(fileext = ".csv")
   write.csv(dic_rows, tmp_dic, row.names = FALSE)
 
-  out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic)
+  expect_warning(out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic), "not in the dictionary")
   expect_true(is.na(out$data$textcol[2]))
 })
 
@@ -273,24 +374,54 @@ test_that("Variables not linked to event_form are removed with warning", {
 
   expect_warning(
     out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic, event_path = tmp_event),
-    "removed since they are not linked"
+    "removed since it is not linked"
   )
   expect_false("extra" %in% names(out$data))
 })
 
 test_that("API branch: filter_field missing record_id triggers helpful error", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   fake_error <- function(...) {
     stop("REDCap's PHP code is likely trying to process too much text in one bite", call. = FALSE)
   }
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_error)
+  mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", function(...) list(data = data.frame(field_name = c("record_id", "fieldX"), field_type = "text")))
 
   expect_error(
     redcap_data(uri = "https://api.example", token = "tok", filter_field = "fieldX"),
-    "record_id"
+    "record_id",
+    class = "REDCapDM_error_argument"
   )
 })
 
+test_that("API branch: with the identifier in filter_field, the error of REDCapR is kept", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  fake_error <- function(...) {
+    stop("REDCap's PHP code is likely trying to process too much text in one bite. The missing ids are: 1e+14.", call. = FALSE)
+  }
+  f <- redcap_data
+  mockery::stub(f, "REDCapR::redcap_read", fake_error)
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) list(data = data.frame(field_name = c("record_id", "value"), field_type = "text")))
+
+  err <- expect_error(f(uri = "https://api.example", token = "tok", filter_field = c("record_id", "value")), class = "REDCapDM_error_api")
+  expect_no_match(conditionMessage(err), "missing on the")
+  expect_match(conditionMessage(err$parent), "1e+14", fixed = TRUE)
+
+  # (the identifier of the project can have another name)
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) list(data = data.frame(field_name = c("patient", "value"), field_type = "text")))
+  expect_error(f(uri = "https://api.example", token = "tok", filter_field = c("patient", "value")), class = "REDCapDM_error_api")
+  expect_error(f(uri = "https://api.example", token = "tok", filter_field = "value"), "missing on the", class = "REDCapDM_error_argument")
+
+  # (without the dictionary, the missing identifier is not given as the cause)
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) stop("no access"))
+  expect_error(f(uri = "https://api.example", token = "tok", filter_field = "value"), class = "REDCapDM_error_api")
+})
+
 test_that("API branch: observational data retrieval with zero rows errors", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   labels_df <- data.frame(record_id = 1)
   fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) {
     if (raw_or_label == "label") return(list(data = labels_df))
@@ -301,6 +432,7 @@ test_that("API branch: observational data retrieval with zero rows errors", {
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_meta)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
 
   expect_error(
     redcap_data(uri = "https://api.example", token = "tok"),
@@ -309,6 +441,8 @@ test_that("API branch: observational data retrieval with zero rows errors", {
 })
 
 test_that("API branch: descriptive fields are filtered from dictionary", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   labels_df <- data.frame(record_id = 1)
   data_api <- data.frame(record_id = 1)
   dic_api <- data.frame(field_name = "junk", field_type = "descriptive", form_name = "f1")
@@ -322,12 +456,15 @@ test_that("API branch: descriptive fields are filtered from dictionary", {
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_meta)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
 
   out <- redcap_data(uri = "https://api.example", token = "tok")
   expect_false("junk" %in% out$dictionary$field_name)
 })
 
 test_that("API branch: checkbox fields get factor versions", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   labels_df <- data.frame(record_id = 1)
   data_api <- data.frame(record_id = 1, var___1 = "1")
   dic_api <- data.frame(field_name = "var", field_type = "checkbox", form_name = "f1")
@@ -341,12 +478,15 @@ test_that("API branch: checkbox fields get factor versions", {
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_meta)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
 
-  out <- redcap_data(uri = "https://api.example", token = "tok")
+  expect_warning(out <- redcap_data(uri = "https://api.example", token = "tok"), "not in the dictionary")
   expect_true("var___1.factor" %in% names(out$data))
 })
 
 test_that("API branch: radio/dropdown fields produce factor versions", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   labels_df <- data.frame(record_id = 1)
   data_api <- data.frame(record_id = 1, radio1 = "1")
   dic_api <- data.frame(
@@ -366,14 +506,17 @@ test_that("API branch: radio/dropdown fields produce factor versions", {
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_meta)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
 
-  out <- redcap_data(uri = "https://api.example", token = "tok")
+  expect_warning(out <- redcap_data(uri = "https://api.example", token = "tok"), "not in the dictionary")
   expect_true("record_id.factor" %in% names(out$data))
   expect_true(is.factor(out$data$record_id.factor))
 })
 
 
 test_that("API branch: longitudinal without event_path fetches event_form via API", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
   labels_df <- data.frame(record_id = 1, redcap_event_name = "ev1")
   data_api <- labels_df
   dic_api <- data.frame(field_name = "record_id", field_type = "text", form_name = "f1")
@@ -389,10 +532,85 @@ test_that("API branch: longitudinal without event_path fetches event_form via AP
 
   mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
   mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", fake_meta)
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
   mockery::stub(redcap_data, "REDCapR::redcap_event_instruments", fake_event)
 
   out <- redcap_data(uri = "https://api.example", token = "tok")
   expect_true("event_form" %in% names(out))
+})
+
+test_that("API branch: the empty data access groups and repeated instrument are empty factors, as with the exported files", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  read_api <- function(instrument_label, instrument) {
+    labels_df <- data.frame(record_id = c(1, 1), `Event Name` = c("Visit", "Visit"), `Repeat Instrument` = c(NA, instrument_label), `Repeat Instance` = c(NA, 2), `Data Access Group` = NA, check.names = FALSE)
+    data_api <- data.frame(record_id = c(1, 1), redcap_event_name = c("visit_arm_1", "visit_arm_1"), redcap_repeat_instrument = c(NA, instrument), redcap_repeat_instance = c(NA, 2), redcap_data_access_group = NA)
+    fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) list(data = if (raw_or_label == "label") labels_df else data_api)
+    mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
+    mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", function(...) list(data = data.frame(field_name = "record_id", field_type = "text", form_name = "f1", field_note = " Note\n")))
+    mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+    mockery::stub(redcap_data, "REDCapR::redcap_event_instruments", function(...) list(data = data.frame(arm_num = 1, unique_event_name = "visit_arm_1", form = "f1")))
+        mockery::stub(
+      redcap_data,
+      "REDCapR::redcap_event_read",
+      function(...) list(
+        success = TRUE,
+        data = data.frame(
+          event_name = "Visit",
+          arm_num = 1L,
+          unique_event_name = "visit_arm_1"
+        )
+      )
+    )
+
+    mockery::stub(
+      redcap_data,
+      "REDCapR::redcap_arm_export",
+      function(...) list(
+        success = TRUE,
+        data = data.frame(
+          arm_number = 1L,
+          arm_name = "Arm 1"
+        )
+      )
+    )
+
+    mockery::stub(
+      redcap_data,
+      "REDCapR::redcap_instruments",
+      function(...) list(
+        success = TRUE,
+        data = data.frame(
+          instrument_name = instrument,
+          instrument_label = instrument_label
+        )
+      )
+    )
+
+    mockery::stub(
+      redcap_data,
+      "REDCapR::redcap_dag_read",
+      function(...) list(
+        success = TRUE,
+        data = data.frame(
+          unique_group_name = character(),
+          data_access_group_name = character()
+        )
+      )
+    )
+    out <- suppressWarnings(suppressMessages(redcap_data(uri = "https://api.example", token = "tok")))
+    # The text of the dictionary has no spaces or line breaks at the beginning or at the end, as with the exported files
+    expect_equal(out$dictionary$field_note, "Note")
+    out$data
+  }
+  # Only the event is repeated and no record is in a data access group: empty factors
+  empty <- read_api(NA, NA)
+  expect_s3_class(empty$redcap_repeat_instrument.factor, "factor")
+  expect_true(all(is.na(empty$redcap_repeat_instrument.factor)))
+  expect_s3_class(empty$redcap_data_access_group.factor, "factor")
+  expect_true(all(is.na(empty$redcap_data_access_group.factor)))
+  # A repeating instrument with records: its labels are kept
+  expect_equal(as.character(read_api("Form 1", "f1")$redcap_repeat_instrument.factor), c(NA, "Form 1"))
 })
 
 test_that("Supplying both file and API arguments errors", {
@@ -419,4 +637,591 @@ test_that("Supplying only uri or only token errors", {
     redcap_data(token = "tok"),
     "Both `uri` and `token` are required"
   )
+})
+
+
+test_that("Event file exported by REDCap without a final newline is read without warnings", {
+  sample_data <- data.frame(id = 1:2, x = c(1, 2))
+  dic_rows <- data.frame(field_name = c("id", "x"), form_name = "demographics", field_type = "text")
+
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(sample_data, tmp_r)
+
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(dic_rows, tmp_dic, row.names = FALSE, quote = FALSE)
+
+  # Same layout as the instrument-event mapping downloaded from REDCap: no final newline
+  tmp_event <- tempfile(fileext = ".csv")
+  cat("arm_num,unique_event_name,form\n1,baseline_arm_1,demographics", file = tmp_event)
+
+  expect_no_warning(
+    out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic, event_path = tmp_event)
+  )
+  expect_equal(out$event_form$unique_event_name, "baseline_arm_1")
+  expect_equal(out$event_form$form, "demographics")
+})
+
+
+test_that("redcap_data explains the mistakes in its arguments and files", {
+  sample_data <- data.frame(id = 1:2, x = c(1, 2))
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(sample_data, tmp_r)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = c("id", "x"), form_name = "f1", field_type = "text"), tmp_dic, row.names = FALSE)
+
+  expect_error(redcap_data(), "No data to read")
+  expect_error(redcap_data(data_path = "no_such_file.r", dic_path = tmp_dic), "File not found: `data_path`")
+  expect_error(redcap_data(data_path = tmp_r, dic_path = "no_such_dic.csv"), "File not found: `dic_path`")
+  expect_error(redcap_data(data_path = tmp_r, dic_path = tmp_dic, rm_mdc = "yes"), "`rm_mdc` must be TRUE or FALSE")
+
+  # The event file of another project
+  tmp_event <- tempfile(fileext = ".csv")
+  write.csv(data.frame(arm_num = 1, unique_event_name = "visit_arm_1", form = "other_form"), tmp_event, row.names = FALSE)
+  expect_error(redcap_data(data_path = tmp_r, dic_path = tmp_dic, event_path = tmp_event), "not the instrument-event mapping of this project")
+})
+
+test_that("redcap_data stops when the csv file read by the R script is not next to it", {
+  dir <- tempfile()
+  dir.create(dir)
+  r_file <- file.path(dir, "PROJ_R.r")
+  writeLines(c("#Clear existing data and graphics", "rm(list=ls())", "data=read.csv('PROJ_DATA.csv')"), r_file)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = "record_id", form_name = "f1", field_type = "text"), tmp_dic, row.names = FALSE)
+
+  expect_error(redcap_data(data_path = r_file, dic_path = tmp_dic), "PROJ_DATA.csv")
+})
+
+test_that("redcap_data warns about a project without records and keeps working with rm_mdc = FALSE", {
+  sample_data <- data.frame(id = character(0), x = character(0), stringsAsFactors = FALSE)
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(sample_data, tmp_r)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = c("id", "x"), form_name = "f1", field_type = c("text", "radio"),
+                       select_choices_or_calculations = c("", "1, A | 2, B")), tmp_dic, row.names = FALSE)
+
+  expect_warning(out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic), "no records yet")
+  expect_equal(nrow(out$data), 0)
+  expect_warning(redcap_data(data_path = tmp_r, dic_path = tmp_dic, rm_mdc = FALSE), "no records yet")
+})
+
+
+test_that("redcap_data reads the R script of REDCap without Hmisc and without closing the plots", {
+  dir <- tempfile()
+  dir.create(dir)
+  write.csv(data.frame(record_id = 1:2, sex = c(1, 2)), file.path(dir, "PROJ_DATA.csv"), row.names = FALSE)
+  writeLines(c(
+    "#Clear existing data and graphics", "rm(list=ls())", "graphics.off()", "#Load Hmisc library", "library(Hmisc)",
+    "#Read Data", "data=read.csv('PROJ_DATA.csv')", "#Setting Labels", "", "label(data$record_id)=\"Record ID\"",
+    "label(data$sex)=\"Sex\"", "#Setting Units", "units(data$sex)=\"code\"", "",
+    "#Setting Factors(will create new variable for factors)", "data$sex.factor = factor(data$sex,levels=c(\"1\",\"2\"))",
+    "levels(data$sex.factor)=c(\"Man\",\"Woman\")"
+  ), file.path(dir, "PROJ_R.r"))
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = c("record_id", "sex"), form_name = "f1", field_type = c("text", "radio"),
+                       select_choices_or_calculations = c("", "1, Man | 2, Woman")), tmp_dic, row.names = FALSE)
+
+  attached_before <- "package:Hmisc" %in% search()
+  grDevices::pdf(NULL)
+  device <- grDevices::dev.cur()
+  on.exit(grDevices::dev.off(device), add = TRUE)
+
+  out <- redcap_data(data_path = file.path(dir, "PROJ_R.r"), dic_path = tmp_dic)
+
+  expect_equal(attr(out$data$sex, "label"), "Sex")
+  expect_equal(levels(out$data$sex.factor), c("Man", "Woman"))
+  expect_equal("package:Hmisc" %in% search(), attached_before)
+  expect_equal(grDevices::dev.cur(), device)
+})
+
+test_that("redcap_data ignores the empty rows of the dictionary and keeps the first row of a repeated field", {
+  sample_data <- data.frame(record_id = 1:2, x = c(1, 2))
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(sample_data, tmp_r)
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = c("record_id", "x", "", "x"), form_name = c("f1", "f1", "", "f2"), field_type = c("text", "text", "", "text")), tmp_dic, row.names = FALSE)
+
+  expect_warning(out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic), "more than one row")
+  expect_equal(out$dictionary$field_name, c("record_id", "x"))
+  expect_equal(out$dictionary$form_name, c("f1", "f1"))
+})
+
+test_that("redcap_data explains that the R script can't be run", {
+  dir <- tempfile()
+  dir.create(dir)
+  write.csv(data.frame(record_id = 1:2), file.path(dir, "PROJ_DATA.csv"), row.names = FALSE)
+  writeLines(c("#Clear existing data and graphics", "rm(list=ls())", "data=read.csv('PROJ_DATA.csv')", "label(data$record_id) = = \"ID\""), file.path(dir, "PROJ_R.r"))
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(field_name = "record_id", form_name = "f1", field_type = "text"), tmp_dic, row.names = FALSE)
+
+  wd <- getwd()
+  expect_error(redcap_data(data_path = file.path(dir, "PROJ_R.r"), dic_path = tmp_dic), class = "REDCapDM_error_file")
+  expect_equal(getwd(), wd)
+})
+
+test_that("redcap_data keeps the text of the text fields that look like numbers", {
+  dir <- tempfile()
+  dir.create(dir)
+  writeLines(c("subj,zip,code,weight,f1_complete", "S-1,00123,1.50,70.5,2", "S-2,12000,1e5,80,2"), file.path(dir, "PROJ_DATA.csv"))
+  writeLines(c(
+    "#Clear existing data and graphics", "rm(list=ls())", "data=read.csv('PROJ_DATA.csv')",
+    "label(data$subj)=\"Subject\"", "label(data$zip)=\"Postal code\"", "label(data$code)=\"Code\"", "label(data$weight)=\"Weight\""
+  ), file.path(dir, "PROJ_R.r"))
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(data.frame(
+    field_name = c("subj", "zip", "code", "weight"), form_name = "f1", field_type = "text",
+    text_validation_type_or_show_slider_number = c("", "zipcode", "", "number")
+  ), tmp_dic, row.names = FALSE)
+
+  out <- redcap_data(data_path = file.path(dir, "PROJ_R.r"), dic_path = tmp_dic)
+
+  expect_equal(out$data$zip, c("00123", "12000"), ignore_attr = TRUE)
+  expect_equal(out$data$code, c("1.50", "1e5"), ignore_attr = TRUE)
+  expect_equal(attr(out$data$zip, "label"), "Postal code")
+  # Numeric fields are not changed
+  expect_equal(out$data$weight, c(70.5, 80), ignore_attr = TRUE)
+  # The label of the record identifier is kept when it has another name
+  expect_equal(attr(out$data$record_id, "label"), "Subject")
+})
+
+test_that("API branch: labels, yes/no and form status factors and forms without event are as in the exported files", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  data_api <- data.frame(subj = 1:2, redcap_event_name = "visit_arm_1", name = c("Ann", "Bob"), smoker = c(1, 0), f1_complete = c(2, 0), extra = c("a", "b"), f2_complete = 0)
+  labels_df <- data.frame(
+    "Subject" = 1:2, "Event Name" = "Visit", "Name" = c("Ann", "Bob"), "Smoker" = c("Yes", "No"), "Complete?" = c("Complete", "Incomplete"),
+    "Extra" = c("a", "b"), "Complete?...7" = "Incomplete", check.names = FALSE
+  )
+  dic_api <- data.frame(
+    field_name = c("subj", "name", "smoker", "extra"), form_name = c("f1", "f1", "f1", "f2"), field_type = c("text", "text", "yesno", "text"),
+    field_label = c("Subject", "Name", "Smoker", "Extra"), select_choices_or_calculations = NA, branching_logic = NA, question_number = NA
+  )
+  event_api <- data.frame(arm_num = 1, unique_event_name = "visit_arm_1", form = "f1")
+
+  fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) {
+    if (raw_or_label == "label") return(list(data = labels_df))
+    list(data = data_api)
+  }
+  mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
+  mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", function(...) list(data = dic_api))
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+  mockery::stub(redcap_data, "REDCapR::redcap_event_instruments", function(...) list(data = event_api))
+    mockery::stub(
+    redcap_data,
+    "REDCapR::redcap_event_read",
+    function(...) list(
+      success = TRUE,
+      data = data.frame(
+        event_name = "Visit",
+        arm_num = 1L,
+        unique_event_name = "visit_arm_1"
+      )
+    )
+  )
+
+  mockery::stub(
+    redcap_data,
+    "REDCapR::redcap_arm_export",
+    function(...) list(
+      success = TRUE,
+      data = data.frame(
+        arm_number = 1L,
+        arm_name = "Arm 1"
+      )
+    )
+  )
+
+  expect_warning(out <- suppressMessages(redcap_data(uri = "https://api.example", token = "tok")), "not linked to any event")
+
+  expect_equal(attr(out$data$record_id, "label"), "Subject")
+  expect_equal(attr(out$data$name, "label"), "Name")
+  expect_equal(as.character(out$data$smoker.factor), c("Yes", "No"))
+  expect_equal(as.character(out$data$f1_complete.factor), c("Complete", "Incomplete"))
+  expect_false("extra" %in% names(out$data))
+  expect_false("extra" %in% out$dictionary$field_name)
+  # As in the exported dictionary, its empty cells are empty texts
+  expect_equal(out$dictionary$branching_logic_show_field_only_if, rep("", 3))
+  expect_equal(out$dictionary$choices_calculations_or_slider_labels, rep("", 3))
+})
+
+test_that("redcap_data removes the HTML of the labels of the dictionary and of the data", {
+  sample_data <- data.frame(id = 1:2, weight = c(70, 80), age = c(17, 95))
+  attr(sample_data$weight, "label") <- "Weight (<i>kg</i>)<br>today"
+  attr(sample_data$age, "label") <- "Age (<18 or >90 years)"
+  tmp_r <- tempfile(fileext = ".R")
+  write_redcap_r_export(sample_data, tmp_r)
+
+  dic_rows <- data.frame(
+    field_name = c("id", "weight", "age"), form_name = "f", field_type = "text",
+    field_label = c("ID", "Weight (<i>kg</i>)<br>today", "Age (<18 or >90 years)"), stringsAsFactors = FALSE
+  )
+  tmp_dic <- tempfile(fileext = ".csv")
+  write.csv(dic_rows, tmp_dic, row.names = FALSE)
+
+  out <- redcap_data(data_path = tmp_r, dic_path = tmp_dic)
+  expect_equal(out$dictionary$field_label[2:3], c("Weight (kg) today", "Age (<18 or >90 years)"))
+  expect_equal(attr(out$data$weight, "label"), "Weight (kg) today")
+  expect_equal(attr(out$data$age, "label"), "Age (<18 or >90 years)")
+})
+
+test_that("API branch: text fields that look like numbers keep their text, as with the exported files", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("readr")
+  skip_if_not_installed("mockery")
+  raw_text <- "subj,phone,dose,n_txt,note,weight,f1_complete\n1,+34600111222,1.50,12,,70.5,2\n2,+34931234567,2,7,,80,0\n"
+  labels_df <- data.frame("Subject" = 1:2, "Phone" = c("+34600111222", "+34931234567"), "Dose" = c("1.50", "2"), "N" = c(12, 7), "Note" = NA, "Weight" = c(70.5, 80),
+    "Complete?" = c("Complete", "Incomplete"), check.names = FALSE)
+  dic_api <- data.frame(
+    field_name = c("subj", "phone", "dose", "n_txt", "note", "weight"), form_name = "f1", field_type = c("text", "text", "text", "text", "notes", "text"),
+    field_label = c("Subject", "Phone", "Dose", "N", "Note", "Weight"), text_validation_type_or_show_slider_number = c(NA, NA, NA, NA, NA, "number")
+  )
+  # As REDCapR: with guess_type = FALSE every column is text, otherwise the types are guessed
+  fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", guess_type = TRUE, ...) {
+    if (raw_or_label == "label") return(list(data = labels_df))
+    list(data = readr::read_csv(I(raw_text), show_col_types = FALSE, col_types = if (guess_type) NULL else readr::cols(.default = "c")))
+  }
+  mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
+  mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", function(...) list(data = dic_api))
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+
+  out <- suppressMessages(redcap_data(uri = "https://api.example", token = "tok"))
+  expect_equal(out$data$phone, c("+34600111222", "+34931234567"), ignore_attr = TRUE)
+  expect_equal(out$data$dose, c("1.50", "2"), ignore_attr = TRUE)
+  # Text fields whose numbers don't change and validated fields are still numbers
+  expect_true(is.numeric(out$data$n_txt))
+  expect_true(is.numeric(out$data$weight))
+  # An empty text field is logical, as read.csv() reads it from the exported files
+  expect_true(is.logical(out$data$note))
+})
+
+test_that("API branch: the Missing Data Codes of the project are added to the default ones and to `mdc`", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  data_api <- data.frame(record_id = 1:4, score = c(10, -999, -777, -555))
+  dic_api <- data.frame(
+    field_name = c("record_id", "score"), form_name = "f1", field_type = "text", field_label = c("ID", "Score"),
+    text_validation_type_or_show_slider_number = c(NA, "integer"), stringsAsFactors = FALSE
+  )
+  fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) {
+    if (raw_or_label == "label") return(list(data = stats::setNames(data_api, c("ID", "Score"))))
+    list(data = data_api)
+  }
+  mockery::stub(redcap_data, "REDCapR::redcap_read", fake_read)
+  mockery::stub(redcap_data, "REDCapR::redcap_metadata_read", function(...) list(data = dic_api))
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = "-999, Not applicable | -777, Unknown")))
+
+  expect_equal(suppressWarnings(redcap_data(uri = "https://api.example", token = "tok"))$data$score, c(10, NA, NA, -555), ignore_attr = TRUE)
+  expect_equal(suppressWarnings(redcap_data(uri = "https://api.example", token = "tok", mdc = "-555"))$data$score, c(10, NA, NA, NA), ignore_attr = TRUE)
+
+  # If the codes of the project can't be read, the default ones are used
+  mockery::stub(redcap_data, "REDCapR::redcap_project_info_read", function(...) stop("no permission"))
+  expect_equal(suppressWarnings(redcap_data(uri = "https://api.example", token = "tok"))$data$score, c(10, -999, -777, -555), ignore_attr = TRUE)
+})
+
+
+# ---- The two requests of the API (values and labels) return the same rows ----
+
+api_rows_project <- function() {
+  list(
+    raw = data.frame(record_id = c("1", "2", "3"), redcap_event_name = "base_arm_1",
+                     redcap_data_access_group = c("hosp_a", "hosp_b", "hosp_c"), age = c(30, 40, 50), stringsAsFactors = FALSE),
+    lab = data.frame(`Record ID` = c("1", "2", "3"), `Event Name` = "Baseline",
+                     `Data Access Group` = c("Hospital A", "Hospital B", "Hospital C"), Age = c(30, 40, 50),
+                     check.names = FALSE, stringsAsFactors = FALSE),
+    dic = data.frame(field_name = c("record_id", "age"), form_name = "f1", field_type = "text", field_label = c("Record ID", "Age"),
+                     select_choices_or_calculations = "", text_validation_type_or_show_slider_number = c("", "integer"),
+                     branching_logic = "", question_number = "", stringsAsFactors = FALSE),
+    events = data.frame(event_name = "Baseline", arm_num = 1, unique_event_name = "base_arm_1"),
+    dags = data.frame(data_access_group_name = c("Hospital A", "Hospital B", "Hospital C"), unique_group_name = c("hosp_a", "hosp_b", "hosp_c"))
+  )
+}
+
+read_api_rows <- function(raw, label_reads) {
+  calls <- 0
+  fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) {
+    if (raw_or_label == "raw") return(list(data = raw))
+    calls <<- calls + 1
+    list(data = label_reads[[min(calls, length(label_reads))]])
+  }
+  f <- redcap_data
+  mockery::stub(f, "REDCapR::redcap_read", fake_read)
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) list(data = api_rows_project()$dic))
+  mockery::stub(f, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+  mockery::stub(f, "REDCapR::redcap_event_instruments", function(...) list(data = data.frame(arm_num = 1, unique_event_name = "base_arm_1", form = "f1")))
+  mockery::stub(f, "REDCapR::redcap_event_read", function(...) list(success = TRUE, data = api_rows_project()$events))
+  mockery::stub(f, "REDCapR::redcap_arm_export", function(...) list(success = TRUE, data = data.frame(arm_number = 1, arm_name = "Arm 1")))
+  mockery::stub(f, "REDCapR::redcap_dag_read", function(...) list(success = TRUE, data = api_rows_project()$dags))
+  out <- suppressWarnings(suppressMessages(f(uri = "https://api.example", token = "tok")))
+  list(out = out, calls = calls)
+}
+
+test_that("redcap_data doesn't give the labels of the API to other rows when the records changed between the two requests", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  pr <- api_rows_project()
+
+  # The same rows: as before
+  ok <- read_api_rows(pr$raw, list(pr$lab))$out
+  expect_equal(as.character(ok$data$redcap_data_access_group.factor), c("Hospital A", "Hospital B", "Hospital C"))
+  # (the identifiers are read as text: they are numbers when their text is that number, as with the exported files)
+  expect_equal(ok$data$record_id, c(1, 2, 3), ignore_attr = TRUE)
+
+  # The same records in another order, fewer or more records: an error, instead of labels of other rows or repeated rows
+  for (rows in list(c(3, 1, 2), 1)) {
+    expect_error(read_api_rows(pr$raw, list(pr$lab[rows, ])), "didn't return the same rows", class = "REDCapDM_error_api")
+  }
+  expect_error(read_api_rows(pr$raw[1, ], list(pr$lab)), "didn't return the same rows", class = "REDCapDM_error_api")
+
+  # The labels are read again: when the records stop changing, the data is read
+  res <- read_api_rows(pr$raw, list(pr$lab[c(3, 1, 2), ], pr$lab))
+  expect_equal(res$calls, 2)
+  expect_equal(as.character(res$out$data$redcap_data_access_group.factor), c("Hospital A", "Hospital B", "Hospital C"))
+})
+
+test_that("redcap_data doesn't accept the labels of other events or data access groups, even if they are consistent", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  pr <- api_rows_project()
+  pr$raw$redcap_event_name <- c("visita_1_arm_1", "visita_2_arm_1", "visita_1_arm_1")
+  pr$events <- data.frame(event_name = c("Visita 1", "Visita 2"), arm_num = 1, unique_event_name = c("visita_1_arm_1", "visita_2_arm_1"))
+  read <- function(raw, label_reads) {
+    api_rows_project <- function() pr
+    environment(read_api_rows) <- environment()
+    read_api_rows(raw, label_reads)
+  }
+
+  # The labels of the events read in the other order (a permutation: each event has a single label)
+  perm <- pr$lab
+  perm$`Event Name` <- c("Visita 2", "Visita 1", "Visita 2")
+  expect_error(read(pr$raw, list(perm)), "didn't return the same rows", class = "REDCapDM_error_api")
+  # (read again: when the labels are the ones of the events)
+  ok <- pr$lab
+  ok$`Event Name` <- c("Visita 1", "Visita 2", "Visita 1")
+  res <- read(pr$raw, list(perm, ok))
+  expect_equal(res$calls, 2)
+  expect_equal(as.character(res$out$data$redcap_event_name.factor), c("Visita 1", "Visita 2", "Visita 1"))
+
+  # The data access groups reassigned between the two requests (the labels of other groups)
+  dags <- ok
+  dags$`Data Access Group` <- c("Hospital B", "Hospital C", "Hospital A")
+  expect_error(read(pr$raw, list(dags)), "didn't return the same rows", class = "REDCapDM_error_api")
+
+  # The label with the arm, as REDCap writes it in projects with several arms
+  arm <- ok
+  arm$`Event Name` <- c("Visita 1 (Arm 1: Arm 1)", "Visita 2 (Arm 1: Arm 1)", "Visita 1 (Arm 1: Arm 1)")
+  expect_equal(as.character(read(pr$raw, list(arm))$out$data$redcap_event_name.factor), arm$`Event Name`)
+})
+
+test_that("redcap_data reads the identifiers as text: long identifiers are not changed or merged", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  pr <- api_rows_project()
+  ids <- c("9007199254740992", "9007199254740993", "100000000000000")
+  pr$raw$record_id <- ids
+  pr$lab$`Record ID` <- ids
+  guess <- list()
+  fake_read <- function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", guess_type = TRUE, ...) {
+    guess[[raw_or_label]] <<- guess_type
+    list(data = if (raw_or_label == "raw") pr$raw else pr$lab)
+  }
+  f <- redcap_data
+  mockery::stub(f, "REDCapR::redcap_read", fake_read)
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) list(data = pr$dic))
+  mockery::stub(f, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+  mockery::stub(f, "REDCapR::redcap_event_instruments", function(...) list(data = data.frame(arm_num = 1, unique_event_name = "base_arm_1", form = "f1")))
+  mockery::stub(f, "REDCapR::redcap_event_read", function(...) list(success = TRUE, data = pr$events))
+  mockery::stub(f, "REDCapR::redcap_arm_export", function(...) list(success = TRUE, data = data.frame(arm_number = 1, arm_name = "Arm 1")))
+  mockery::stub(f, "REDCapR::redcap_dag_read", function(...) list(success = TRUE, data = pr$dags))
+  out <- suppressWarnings(suppressMessages(f(uri = "https://api.example", token = "tok")))
+
+  # Both requests (also the first request of REDCapR, with the identifiers) read text
+  expect_identical(guess, list(label = FALSE, raw = FALSE))
+  expect_identical(as.vector(out$data$record_id), ids)
+  expect_equal(as.character(out$data$redcap_data_access_group.factor), c("Hospital A", "Hospital B", "Hospital C"))
+  # (the other fields are converted as before)
+  expect_type(out$data$age, "double")
+
+  # Identifiers with zeros on the left keep them
+  pr$raw$record_id <- pr$lab$`Record ID` <- c("001", "002", "010")
+  out <- suppressWarnings(suppressMessages(f(uri = "https://api.example", token = "tok")))
+  expect_identical(as.vector(out$data$record_id), c("001", "002", "010"))
+})
+
+test_that("redcap_data warns when the labels can't be checked with the metadata, and keeps the codes", {
+  skip_if_not_installed("REDCapR", "1.2.0")
+  skip_if_not_installed("mockery")
+  pr <- api_rows_project()
+  f <- redcap_data
+  mockery::stub(f, "REDCapR::redcap_read", function(redcap_uri = NULL, token = NULL, raw_or_label = "raw", ...) list(data = if (raw_or_label == "raw") pr$raw else pr$lab))
+  mockery::stub(f, "REDCapR::redcap_metadata_read", function(...) list(data = pr$dic))
+  mockery::stub(f, "REDCapR::redcap_project_info_read", function(...) list(data = data.frame(missing_data_codes = NA)))
+  mockery::stub(f, "REDCapR::redcap_event_instruments", function(...) list(data = data.frame(arm_num = 1, unique_event_name = "base_arm_1", form = "f1")))
+  mockery::stub(f, "REDCapR::redcap_event_read", function(...) list(success = TRUE, data = pr$events))
+  mockery::stub(f, "REDCapR::redcap_arm_export", function(...) list(success = TRUE, data = data.frame(arm_number = 1, arm_name = "Arm 1")))
+  mockery::stub(f, "REDCapR::redcap_dag_read", function(...) stop("You do not have permission"))
+  expect_warning(out <- suppressMessages(f(uri = "https://api.example", token = "tok")), "redcap_data_access_group.factor")
+  expect_equal(as.character(out$data$redcap_data_access_group.factor), c("hosp_a", "hosp_b", "hosp_c"))
+  expect_equal(as.character(out$data$redcap_event_name.factor), rep("Baseline", 3))
+})
+
+test_that("api_label_columns gives each row the label of its code, checked with the metadata of the project", {
+  raw <- data.frame(record_id = c("1", "1", "2"), redcap_event_name = c("b_arm_1", "v_arm_1", "b_arm_1"),
+                    redcap_repeat_instrument = c(NA, "meds", NA), redcap_repeat_instance = c(NA, 1, NA))
+  lab <- data.frame(record_id = c("1", "1", "2"), `Event Name` = c("Base", "Visit", "Base"),
+                    `Repeat Instrument` = c(NA, "Medication", NA), `Repeat Instance` = c(NA, "1", NA), check.names = FALSE)
+  meta <- list(
+    event = api_event_metadata(data.frame(unique_event_name = c("b_arm_1", "v_arm_1"), event_name = c("Base", "Visit"), arm_num = 1), NULL),
+    instrument = api_code_metadata(data.frame(instrument_name = "meds", instrument_label = "Medication"), "instrument_name", "instrument_label")
+  )
+  out <- api_label_columns(lab, raw, meta)
+  expect_equal(as.character(out$redcap_event_name.factor), c("Base", "Visit", "Base"))
+  expect_equal(levels(out$redcap_event_name.factor), c("Base", "Visit"))
+  expect_equal(out$redcap_repeat_instrument.factor, c(NA, "Medication", NA))
+  expect_length(attr(out, "unchecked"), 0)
+
+  # Another repetition or another record in a row: the rows are not the same ones
+  l2 <- lab; l2$`Repeat Instance`[2] <- "2"; expect_null(api_label_columns(l2, raw, meta))
+  l3 <- lab; l3$record_id[3] <- "3"; expect_null(api_label_columns(l3, raw, meta))
+  expect_null(api_label_columns(lab[c(2, 1, 3), ], raw, meta))
+  # Two labels of an event, or the label of another event (a permutation of the events): not accepted
+  l4 <- lab; l4$`Event Name`[3] <- "Visit"; expect_null(api_label_columns(l4, raw, meta))
+  l5 <- lab; l5$`Event Name` <- c("Visit", "Base", "Visit"); expect_null(api_label_columns(l5, raw, meta))
+  # The label of another instrument
+  l6 <- lab; l6$`Repeat Instrument`[2] <- "Adverse events"; expect_null(api_label_columns(l6, raw, meta))
+
+  # Without the metadata of a column (or of some code), the codes, which are not labels of other rows
+  out2 <- api_label_columns(lab, raw, list(instrument = meta$instrument))
+  expect_equal(as.character(out2$redcap_event_name.factor), c("b_arm_1", "v_arm_1", "b_arm_1"))
+  expect_equal(attr(out2, "unchecked"), "redcap_event_name.factor")
+  # (a single code with a single label can't be the label of another code)
+  out3 <- api_label_columns(
+    lab[c(1, 3), ],
+    raw[c(1, 3), ],
+    list()
+  )
+
+  expect_equal(as.character(out3$redcap_event_name.factor), c("Base", "Base"))
+  expect_length(attr(out3, "unchecked"), 0)
+  # (with several codes, their labels are not used)
+  out4 <- api_label_columns(lab, raw, list())
+  expect_equal(as.character(out4$redcap_event_name.factor), c("b_arm_1", "v_arm_1", "b_arm_1"))
+  expect_equal(attr(out4, "unchecked"), "redcap_event_name.factor")
+  expect_equal(out4$redcap_repeat_instrument.factor, c(NA, "Medication", NA))
+})
+
+test_that("a user of a data access group, who can't read the data access groups of the project, gets the label of their group", {
+  raw <- data.frame(record_id = c("1", "2"), redcap_data_access_group = "hospital_b")
+  lab <- data.frame(record_id = c("1", "2"), `Data Access Group` = "Hospital B", check.names = FALSE)
+  out <- api_label_columns(lab, raw, list(dag = NULL))
+  expect_equal(as.character(out$redcap_data_access_group.factor), c("Hospital B", "Hospital B"))
+  expect_length(attr(out, "unchecked"), 0)
+})
+
+test_that("api_label_matches accepts the label of the code, with or without its arm, and not the label of another one", {
+  expect_true(api_label_matches("Visita 1", "Visita 1", "1", "Drug A"))
+  expect_true(api_label_matches("Visita 1 (Arm 1: Drug A)", "Visita 1", "1", "Drug A"))
+  expect_true(api_label_matches("Visita 1 (Brazo 1: Drug A)", "Visita 1", "1", "Drug A"))
+  expect_true(api_label_matches("Visita 1 (Arm 1: Drug A)", "Visita 1", "1", NA))
+  expect_false(api_label_matches("Visita 2 (Arm 1: Drug A)", "Visita 1", "1", "Drug A"))
+  expect_false(api_label_matches("Visita 1 (Arm 2: Placebo)", "Visita 1", "1", "Drug A"))
+  expect_false(api_label_matches("Visita 1 (Arm 2: Placebo)", "Visita 1", "1", NA))
+  expect_false(api_label_matches("Visita 2", "Visita 1", "1", "Drug A"))
+  # (HTML, entities and spaces)
+  expect_true(api_label_matches("Adverse events", "<b>Adverse</b>&nbsp;events", NA, NA))
+  expect_true(api_label_matches("Hospital A & C", "Hospital  A &amp; C", NA, NA))
+  expect_false(api_label_matches("Hospital B", "Hospital A", NA, NA))
+  expect_false(api_label_matches(NA, "Hospital A", NA, NA))
+})
+
+test_that("api_id_requested only gives the identifier as missing when it is known", {
+  dic <- data.frame(field_name = c("record_id", "value"))
+  expect_true(api_id_requested(dic, c("record_id", "value")))
+  expect_false(api_id_requested(dic, "value"))
+  expect_true(api_id_requested(NULL, "value"))
+  expect_true(api_id_requested(data.frame(), "value"))
+})
+
+test_that("the metadata of the API without rows (e.g. a project without data access groups) is metadata without codes", {
+  expect_equal(nrow(api_code_metadata(data.frame(unique_group_name = character(0), data_access_group_name = character(0)), "unique_group_name", "data_access_group_name")), 0)
+  expect_equal(nrow(api_event_metadata(data.frame(unique_event_name = character(0), event_name = character(0), arm_num = integer(0)), NULL)), 0)
+  expect_equal(api_event_metadata(data.frame(unique_event_name = "a_arm_1", event_name = "A", arm_num = 1), NULL)$arm_name, NA_character_)
+  # (empty data access groups in the data: an empty factor)
+  out <- api_label_columns(data.frame(record_id = "1", `Data Access Group` = NA, check.names = FALSE), data.frame(record_id = "1", redcap_data_access_group = NA),
+                           list(dag = api_code_metadata(data.frame(unique_group_name = character(0), data_access_group_name = character(0)), "unique_group_name", "data_access_group_name")))
+  expect_s3_class(out$redcap_data_access_group.factor, "factor")
+  expect_length(attr(out, "unchecked"), 0)
+})
+
+
+test_that("native CSV imports preserve categorical codes and factors", {
+  folder <- tempfile()
+  dir.create(folder)
+  on.exit(unlink(folder, recursive = TRUE), add = TRUE)
+
+  cases <- list(
+    c("T", "F"), c("01", "02"), c("1", "2"),
+    c("TRUE", "FALSE"), c("-2", "-1"),
+    c("1.0", "2.0"), c("1e2", "2e2"),
+    c("9007199254740992", "9007199254740993"),
+    c("A", "B"), c("0.10", "0.20"), c("+1", "+2"),
+    c("01", "1"), c("1e5", "100000"),
+    c("1.0", "1"), c("T", "TRUE")
+  )
+
+  for (type in c("radio", "dropdown")) {
+    for (codes in cases) {
+      data <- data.frame(
+        record_id = c("007", "008"),
+        s = codes
+      )
+      write.csv(
+        data, file.path(folder, "P_DATA.csv"),
+        row.names = FALSE, na = ""
+      )
+
+      dictionary <- audit_dic(
+        c("record_id", "s"),
+        c("text", type),
+        choices = c(
+          "",
+          paste(
+            paste(codes, c("First", "Second"), sep = ", "),
+            collapse = " | "
+          )
+        )
+      )
+      write.csv(
+        dictionary, file.path(folder, "DIC.csv"),
+        row.names = FALSE
+      )
+
+      script <- c(
+        "## REDCap R export",
+        "## begin data",
+        "data=read.csv('P_DATA.csv',stringsAsFactors=FALSE)",
+        paste0(
+          "data$s.factor=factor(data$s,levels=",
+          paste(deparse(codes), collapse = ""),
+          ",labels=c('First','Second'))"
+        ),
+        "attr(data$s,'label')='Choice'"
+      )
+      writeLines(script, file.path(folder, "P_R.r"))
+
+      out <- redcap_data(
+        data_path = file.path(folder, "P_R.r"),
+        dic_path = file.path(folder, "DIC.csv")
+      )
+
+      expect_equal(as.character(out$data$s), codes)
+      expect_equal(
+        as.character(out$data$s.factor),
+        c("First", "Second")
+      )
+      expect_equal(
+        as.character(out$data$record_id),
+        c("007", "008")
+      )
+      expect_identical(attr(out$data$s, "label"), "Choice")
+    }
+  }
 })

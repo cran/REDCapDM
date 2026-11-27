@@ -33,12 +33,14 @@ A list with the following elements:
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Converts variables in a REDCap dataset with associated \code{.factor} columns into actual factor variables, while allowing the exclusion of specific variables. Ensures consistency with the dataset and preserves variable labels.
 }
 \details{
-The function looks for columns ending in \code{.factor} and replaces the original variable values with those \code{.factor} values (converted to factors). It preserves variable labels. The \code{exclude} argument must contain base variable names (no \code{.factor} suffix); if any \code{.factor} names are passed to \code{exclude} the function will throw an informative error. The columns \code{redcap_event_name}, \code{redcap_repeat_instrument} and \code{redcap_data_access_group} (and their \code{.factor} counterparts) are handled specially to avoid altering event or access-group data.
+The function looks for columns ending in \code{.factor} and replaces the original variable values with those \code{.factor} values (converted to factors). The variables in \code{exclude}, the system columns below and the variables whose labels are of several codes (with a warning) keep both columns. A \code{.factor} column that isn't a factor (e.g. text, after modifying the data) is converted to a factor, with the levels in the order of the options of the dictionary. It preserves variable labels. The \code{exclude} argument must contain base variable names (no \code{.factor} suffix); if any \code{.factor} names are passed to \code{exclude} the function will throw an informative error. The columns \code{redcap_event_name}, \code{redcap_repeat_instrument} and \code{redcap_data_access_group} (and their \code{.factor} counterparts) are handled specially to avoid altering event or access-group data. A \code{.factor} column whose original variable no longer exists (e.g. removed with \code{rd_delete_vars()}), also of these columns, is removed with a warning.
+
+Use \code{rd_factor()} before \code{rd_dictionary()}: the branching logic and calculations that \code{rd_dictionary()} translates to R compare the variables with their original codes, so they stop working once the variables are factors. If the dictionary already has logic translated to R that uses any of the converted variables, a warning is shown.
 }
 \examples{
 \dontrun{
@@ -48,3 +50,16 @@ transformed_data <- result$data
 }
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

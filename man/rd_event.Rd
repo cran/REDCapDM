@@ -12,10 +12,11 @@ rd_event(
   event,
   filter = NA,
   query_name = NA,
-  addTo = NA,
+  add_to = NA,
   report_title = NA,
   report_zeros = FALSE,
-  link = list()
+  link = list(),
+  addTo = deprecated()
 )
 }
 \arguments{
@@ -29,23 +30,25 @@ rd_event(
 
 \item{event}{Character vector with one or more REDCap event names to check for missing records.}
 
-\item{filter}{Optional. A single character string containing a filter expression to subset the dataset before checking for missing events. Example: \code{"age >= 18"}.}
+\item{filter}{Optional. A single character string containing a filter expression that selects the records to check. Example: \code{"age >= 18"}. It can use objects created in your session or in your function. Whether each selected record has the event is checked with all its data (also the rows that the filter doesn't select).}
 
-\item{query_name}{Optional character vector describing each query. Defaults to a standard format: \verb{The event (event_name) is missing}.}
+\item{query_name}{Optional character vector describing each query: one message for all the events, or one message for each event of \code{event} (in its order). Defaults to a standard format with the unique event name: \verb{The event 'event_name' is missing.}, also for the events with an \code{NA} message.}
 
-\item{addTo}{Optional data frame from a previous query report to which the new results can be appended.}
+\item{add_to}{Optional output of a previous \code{rd_query()} or \code{rd_event()} to which the new queries are appended. Its queries must be a data frame: the output of \code{rd_query(by_dag = TRUE)}, whose queries are a list of data frames, can't be used.}
 
 \item{report_title}{Optional string specifying the title of the final report. Defaults to \code{"Report of queries"}.}
 
-\item{report_zeros}{Logical, include variables with zero queries in the report. Default is \code{FALSE}.}
+\item{report_zeros}{Logical, include events with zero queries in the report. Default is \code{FALSE}.}
 
-\item{link}{Optional list containing project information (\code{domain}, \code{redcap_version}, \code{proj_id}, \code{event_id}) to generate clickable links for each query.}
+\item{link}{Optional list containing project information (\code{domain}, \code{redcap_version}, \code{proj_id}) to generate a link for each query, which opens the home page of the record in REDCap (unlike \code{rd_query()}, it doesn't use \code{event_id}).}
+
+\item{addTo}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{add_to} instead.}
 }
 \value{
-A named list with two elements:
+A list of class \code{REDCapDM_report}, which prints a short summary (see \code{\link[=print.REDCapDM_report]{print.REDCapDM_report()}}), with two elements:
 \describe{
 \item{\code{queries}}{A data frame listing records missing the specified events.
-Columns: \code{Identifier}, \code{DAG}, \code{Event}, \code{Instrument},
+Columns: \code{Identifier} (the record identifier, \code{record_id} or else the first field of the dictionary, which \code{filter} can use by its name), \code{DAG}, \code{Event} (the unique event name), \code{EventLabel} (its label), \code{Instrument},
 \code{Field}, \code{Repetition}, \code{Description}, \code{Query}, \code{Code},
 and optionally \code{Link}. If no queries are found this will be an empty
 data frame with the expected columns.}
@@ -56,7 +59,7 @@ the number of missing records per event. Returned as \code{knitr::kable} (HTML).
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Helps identify records in a REDCap longitudinal project that are missing one or more specified events. Because REDCap typically omits empty events from exports, an event that contains no data for a record will not appear. This function finds those absent events and returns a per-record query table and a summarized HTML report.
+Helps identify records in a REDCap longitudinal project that are missing one or more specified events. Because REDCap typically omits empty events from exports, an event that contains no data for a record will not appear. This function finds those absent events (not whether the events are complete) and returns a per-record query table and a summarized HTML report.
 }
 \examples{
 # Minimal reproducible example
@@ -82,3 +85,10 @@ res$queries
 res$results
 
 }
+\seealso{
+Other query functions:
+\code{\link[=check_queries]{check_queries()}},
+\code{\link[=rd_export]{rd_export()}},
+\code{\link[=rd_query]{rd_query()}}
+}
+\concept{query functions}

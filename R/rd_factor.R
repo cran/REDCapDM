@@ -1,7 +1,7 @@
 #' Convert Variables to Factors in a REDCap Dataset
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #'
 #' Converts variables in a REDCap dataset with associated `.factor` columns into actual factor variables, while allowing the exclusion of specific variables. Ensures consistency with the dataset and preserves variable labels.
 #'
@@ -20,7 +20,9 @@
 #' }
 #'
 #' @details
-#' The function looks for columns ending in `.factor` and replaces the original variable values with those `.factor` values (converted to factors). It preserves variable labels. The `exclude` argument must contain base variable names (no `.factor` suffix); if any `.factor` names are passed to `exclude` the function will throw an informative error. The columns `redcap_event_name`, `redcap_repeat_instrument` and `redcap_data_access_group` (and their `.factor` counterparts) are handled specially to avoid altering event or access-group data.
+#' The function looks for columns ending in `.factor` and replaces the original variable values with those `.factor` values (converted to factors). The variables in `exclude`, the system columns below and the variables whose labels are of several codes (with a warning) keep both columns. A `.factor` column that isn't a factor (e.g. text, after modifying the data) is converted to a factor, with the levels in the order of the options of the dictionary. It preserves variable labels. The `exclude` argument must contain base variable names (no `.factor` suffix); if any `.factor` names are passed to `exclude` the function will throw an informative error. The columns `redcap_event_name`, `redcap_repeat_instrument` and `redcap_data_access_group` (and their `.factor` counterparts) are handled specially to avoid altering event or access-group data. A `.factor` column whose original variable no longer exists (e.g. removed with `rd_delete_vars()`), also of these columns, is removed with a warning.
+#'
+#' Use `rd_factor()` before `rd_dictionary()`: the branching logic and calculations that `rd_dictionary()` translates to R compare the variables with their original codes, so they stop working once the variables are factors. If the dictionary already has logic translated to R that uses any of the converted variables, a warning is shown.
 #'
 #' @examples
 #' \dontrun{
@@ -29,6 +31,7 @@
 #' transformed_data <- result$data
 #' }
 #'
+#' @family process functions
 #' @export
 #' @importFrom stats na.omit
 
@@ -44,9 +47,15 @@ rd_factor <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL
   }
 
   # Ensure both `data` and `dic` are provided; stop if either is missing
-  if (is.null(data) | is.null(dic)) {
-    stop("Both `data` and `dic` (data and dictionary) arguments must be provided.")
+  if (is.null(data) || is.null(dic)) {
+    rd_abort("Both {.arg data} and {.arg dic} (data and dictionary) arguments must be provided.")
   }
+  
+  # Error: invalid arguments
+  check_inputs(data, dic)
+  data <- plain_data(data)
+  dic <- plain_dic(dic)
+  check_strings(exclude, "exclude")
 
   # Extract labels from the data to reapply later
   labels <- purrr::map_chr(data, function(x) {
@@ -67,58 +76,131 @@ rd_factor <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL
   data <- data |>
     dplyr::select(-dplyr::any_of(keep))
 
+  # A factor version of these columns whose original column no longer exists (e.g. removed with rd_delete_vars()) is an
+  # orphan, as the ones below: it can't be put next to its column
+  system_orphan <- names(keep_factors)[!sub("\\.factor$", "", names(keep_factors)) %in% names(data)]
+  keep_factors <- keep_factors[setdiff(names(keep_factors), system_orphan)]
+
   # Identify factor columns and remove orphans
   factor_cols <- grep("\\.factor$", names(data), value = TRUE)
   factors <- sub("\\.factor$", "", factor_cols)
   factors <- setdiff(factors, sub("\\.factor$", "", keep))
 
   # Detect orphan .factor columns (base column missing)
-  orphan <- factor_cols[!factors %in% names(data)]
+  orphan <- c(system_orphan, factor_cols[!factors %in% names(data)])
 
   if (length(orphan) > 0) {
-    warning(
-      stringr::str_glue(
-        "Removed {length(orphan)} '.factor' column(s) whose original variables no longer exist. This usually happens if the original variables were deleted earlier using `rd_delete_vars` and the '.factor' version was kept."
-      ),
-      call. = FALSE
-    )
+    rd_warn(c("Removed {length(orphan)} '.factor' column{?s} whose original variables no longer exist.", "i" = "This usually happens if the original variables were deleted earlier using {.fn rd_delete_vars} and the '.factor' version was kept."))
     # Remove orphan columns
-    data <- data[, setdiff(names(data), orphan)]
+    data <- data[, setdiff(names(data), orphan), drop = FALSE]
     # Update factors vector after removal
     factors <- setdiff(factors, sub("\\.factor$", "", orphan))
   }
 
   # If there are no factor variables, stop the function
   if (length(factors) == 0) {
-    warning("There are no variables in the data which can be converted to factors.", call. = FALSE)
+    rd_warn("There are no variables in the data which can be converted to factors.")
   } else {
     if (!is.null(exclude)) {
       bad_vars <- exclude[grepl("\\.factor$", exclude)]
       if (length(bad_vars) > 0) {
-        stop(
-          sprintf(
-            "Please use the original form of the variable(s) without '.factor' in the exclude argument: %s",
-            paste(bad_vars, collapse = ", ")
-          ),
-          call. = FALSE
-        )
+        rd_abort("Please use the original form of the variable(s) without '.factor' in the exclude argument: {.var {bad_vars}}", class = "REDCapDM_error_argument")
       }
     }
+    
+    # Warning: excluded variables that are not in the data
+    if (any(!exclude %in% names(data))) {
+      not_in_data <- setdiff(exclude, names(data))
+      rd_warn("The following variables of {.arg exclude} are not in the data: {.var {not_in_data}}.")
+    }
+
     # Exclude specified variables that should not be converted to factors
     factors <- setdiff(factors, exclude)
 
-    # If no variables are left to convert, stop and ask to review the exclude argument
-    if (length(factors) == 0) {
-      stop("All variables in the data which can be converted to factors are specified in the `exclude` argument. Please, review the `exclude` argument.", call. = FALSE)
+        # Preserve raw codes when labels cannot identify them uniquely.
+    ambiguous <- factors[vapply(factors, function(field) {
+      mapping <- factor_code_mapping(field, dic)
+
+      dictionary_pairs <- data.frame(
+        code = as.character(unname(mapping)),
+        label = as.character(names(mapping)),
+        stringsAsFactors = FALSE
+      )
+
+      observed_pairs <- data.frame(
+        code = as.character(data[[field]]),
+        label = as.character(data[[paste0(field, ".factor")]]),
+        stringsAsFactors = FALSE
+      )
+
+      pairs <- unique(rbind(dictionary_pairs, observed_pairs))
+      pairs <- pairs[
+        !is.na(pairs$code) & !is.na(pairs$label),
+        ,
+        drop = FALSE
+      ]
+
+      anyDuplicated(pairs$label) > 0L
+    }, logical(1))]
+
+    if (length(ambiguous) > 0L) {
+      factor_bases <- ambiguous[
+        vapply(data[ambiguous], is.factor, logical(1))
+      ]
+
+      if (length(factor_bases) > 0L) {
+        rd_abort(
+          "Cannot recover unambiguous raw codes for {.var {factor_bases}}. Reload these variables from REDCap.",
+          class = "REDCapDM_error_data"
+        )
+      }
+
+      rd_warn(
+        "Labels of {.var {ambiguous}} refer to different codes. Their original values and .factor columns were preserved."
+      )
+
+      factors <- setdiff(factors, ambiguous)
     }
 
-    # Perform the transformation of factor columns into actual factor variables
-    data <- data |>
-      # Assign the values from the factor columns to the original columns and remove the '.factor' versions
-      dplyr::mutate(dplyr::across(tidyselect::all_of(factors), ~ get(
-        stringr::str_glue("{dplyr::cur_column()}.factor")
-      ))) |>
-      dplyr::select(-stringr::str_glue("{factors}.factor"))
+    # Every variable that can be converted is in `exclude`: nothing to convert (as when there are no such variables)
+    if (length(factors) == 0) {
+      if (length(ambiguous) == 0L) {
+        rd_warn("All the variables that can be converted to factors are in {.arg exclude}: none was converted.")
+      }
+    } else {
+      # Perform the transformation of factor columns into actual factor variables
+      data <- data |>
+        # Assign the values from the factor columns to the original columns and remove the '.factor' versions
+        dplyr::mutate(dplyr::across(tidyselect::all_of(factors), ~ get(
+          stringr::str_glue("{dplyr::cur_column()}.factor")
+        ))) |>
+        dplyr::select(-stringr::str_glue("{factors}.factor"))
+
+      # `.factor` columns that aren't factors (e.g. text after modifying the data): the labels are converted to a factor,
+      # with the levels in the order of the options of the dictionary
+      for (f in factors[!vapply(data[factors], is.factor, logical(1))]) {
+        data[[f]] <- labels_factor(data[[f]], names(factor_code_mapping(f, dic)))
+      }
+
+      # Branching logic or calculations already translated to R (rd_dictionary) compare the variables with their
+      # original codes, so they no longer work once these variables are factors
+      logic_cols <- intersect(c("branching_logic_show_field_only_if", "choices_calculations_or_slider_labels"), names(dic))
+      r_logic <- unlist(lapply(dic[logic_cols], as.character), use.names = FALSE)
+      r_logic <- without_texts(r_logic[!is.na(r_logic)])
+      r_logic <- r_logic[grepl("data\\$", r_logic)]
+      # (also the names between backticks, e.g. data$`if`)
+      logic_vars <- unique(gsub("`", "", unlist(stringr::str_extract_all(r_logic, "(?<=data\\$)(\\w+|`\\w+`)"))))
+      affected <- intersect(factors, logic_vars)
+
+      if (length(affected) > 0) {
+        shown <- paste(utils::head(affected, 10), collapse = ", ")
+        if (length(affected) > 10) {
+          shown <- paste0(shown, ", ...")
+        }
+
+        rd_warn(c("Dictionary logic already translated to R uses the original codes of variables now converted to factors ({shown}).", "i" = "Run {.fn rd_factor} before {.fn rd_dictionary}."))
+      }
+    }
   }
 
   # If there were any variables that were excluded from conversion, reattach them to the data
@@ -172,4 +254,25 @@ rd_factor <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL
     results = stringr::str_glue("{results}")
   ) |>
     purrr::compact() # Remove any NULL elements from the output list
+}
+
+
+#' Labels of a variable as a factor
+#'
+#' @param x Labels (e.g. a `.factor` column that is text).
+#' @param options Labels of the options of the dictionary, in order.
+#' @return A factor. Its levels are the options of the dictionary when every label is one of them (as in the `.factor`
+#'   columns of `redcap_data()`); otherwise the options found, then the other labels in alphabetical order.
+#' @noRd
+labels_factor <- function(x, options) {
+  x <- as.character(x)
+  found <- unique(x[!is.na(x)])
+
+  levels <- if (length(options) > 0 && all(found %in% options)) {
+    unique(options)
+  } else {
+    unique(c(intersect(options, found), sort(setdiff(found, options))))
+  }
+
+  factor(x, levels = levels)
 }

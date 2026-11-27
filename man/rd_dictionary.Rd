@@ -25,7 +25,7 @@ A list with the following elements:
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Updates a REDCap data dictionary by converting branching logic and calculation expressions into valid R expressions. This ensures that conditional display rules and calculated fields in the dictionary can be programmatically evaluated with the dataset. Any variables that cannot be converted are reported in the results.
 }
@@ -34,6 +34,7 @@ The function performs the following tasks:
 \itemize{
 \item Evaluates and transforms branching logic expressions into valid R expressions using \code{rd_rlogic}.
 \item Evaluates and converts calculation expressions for fields of type \code{calc}.
+\item Keeps in REDCap syntax, with the codes of the options, the logic that uses as a number a variable already converted into a factor (e.g. \verb{[score] >= 3} or \verb{[a] + [b]} after \code{rd_factor()}): it can't be written as R logic of the factors. \code{rd_rlogic()} and \code{rd_query()} evaluate it with the codes, as REDCap does. The same happens with the logic that uses variables of other events.
 \item Generates a results summary table listing any variables that could not be converted.
 }
 }
@@ -45,3 +46,16 @@ updated_dic <- result$dictionary
 }
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

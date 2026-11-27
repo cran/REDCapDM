@@ -1,7 +1,7 @@
 #' Split a REDCap dataset by form or event
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #'
 #' Splits a REDCap dataset into separate datasets by **form** or **event** using the data dictionary. Supports both longitudinal and non-longitudinal projects and can return wide or long formats for repeated measures.
 #'
@@ -15,14 +15,15 @@
 #'
 #' @details
 #' * Handles checkbox variables and REDCap default variables (`_complete`, `_timestamp`) appropriately.
+#' * Columns of the data that aren't fields of the dictionary, nor the `.factor` or `_mdc` versions of its fields or the options of its checkbox fields (or the `.factor` version of the `_complete` field of a form), stop the function with an error that names them.
 #' * For form-based splits in longitudinal projects, uses `event_form` to map variables to events.
-#' * Wide format expands repeated instances into multiple columns per record.
+#' * Wide format expands repeated instances into multiple columns per record. A form with only the record identifier gives one row per record.
 #' * Filtering by `which` allows extracting a single form or event.
-#' * Projects with repeated instruments are handled by filtering on the `redcap_repeat_instrument` variable.
+#' * Projects with repeated instruments are handled by filtering on the `redcap_repeat_instrument` variable (its codes). The column shows the label of each instrument (its factor version, from `redcap_data()`), or its code when the label is missing.
 #'
 #' @return Depending on `which` and `wide`:
 #' \describe{
-#'   \item{data}{A `data.frame` or a list of `data.frames` representing the split datasets.}
+#'   \item{data}{Without `which`, a tibble with one row per form (columns `form`, `events` in longitudinal projects, and `df`) or per event (columns `events` and `df`): the dataset of each form or event is in the list-column `df` (e.g. `result$data$df[[1]]`, or `result$data$df[result$data$form == "demographics"][[1]]`). With `wide = TRUE`, the tibble of the forms also has the column `max_repeated_instance`, the largest number of rows of a record in each form (its events and repetitions): the wide columns are numbered by the position of each row of the record, not by its instance (e.g. the instances 2 and 5 of a record are the columns `_1` and `_2`, and the maximum is 2). With `which`, the `data.frame` of that form or event.}
 #'   \item{dictionary}{The original REDCap dictionary.}
 #'   \item{event_form}{The original event-form mapping (if applicable).}
 #'   \item{results}{A summary message of the splitting operation.}
@@ -41,6 +42,7 @@
 #'
 #' print(result)
 #'
+#' @family process functions
 #' @export
 
 rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL, which = NULL, by = "form", wide = FALSE) {
@@ -54,8 +56,30 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
   }
 
   # Ensure both `data` and `dic` are provided; stop if either is missing
-  if (is.null(data) | is.null(dic)) {
-    stop("Both `data` and `dic` (data and dictionary) arguments must be provided.")
+  if (is.null(data) || is.null(dic)) {
+    rd_abort("Both {.arg data} and {.arg dic} (data and dictionary) arguments must be provided.")
+  }
+  
+  # Error: invalid arguments
+  check_inputs(data, dic, dic_cols = c("field_name", "form_name"), dic_rows = TRUE)
+  check_event_form(event_form)
+  data <- plain_data(data)
+  dic <- plain_dic(dic)
+  check_strings(which, "which")
+  check_flag(wide, "wide")
+
+  # Error: invalid `by`
+  if (!is.character(by) || !isTRUE(by %in% c("form", "event"))) {
+    rd_abort("Invalid {.arg by} argument. Please specify either {.val form} or {.val event}.", class = "REDCapDM_error_argument")
+  }
+
+  # Error: splitting by event needs a longitudinal project and its event-form correspondence
+  if (by == "event" && !"redcap_event_name" %in% names(data)) {
+    rd_abort("The data has no events: use {.code by = 'form'} to split a project without events.")
+  }
+
+  if (by == "event" && is.null(event_form)) {
+    rd_abort("The event-form correspondence ({.arg event_form}) is required to split the data by event.")
   }
 
   # Extract labels from the data to reapply later
@@ -68,18 +92,20 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
     }
   })
 
-  # Check if the project has repeated instruments
+  # Check if the project has repeated instruments (an empty text, e.g. read from a CSV file, or with spaces is no
+  # instrument)
   if ("redcap_repeat_instrument" %in% names(data)) {
-    repeat_instrument <- dplyr::case_when(
-      any(!is.na(data$redcap_repeat_instrument)) ~ TRUE,
-      TRUE ~ FALSE
-    )
+    repeat_instrument <- any(!is.na(repeat_instrument_values(data)))
   } else {
     repeat_instrument <- FALSE
   }
 
+  # The record identifier: record_id or else the first field of the dictionary (REDCap's record ID, e.g. `subject` or
+  # `study_id`), see id_field(). Every dataset of the split keeps it
+  id_var <- id_field(data, dic)
+
   # Identify basic REDCap variables present in the dataset
-  basic_redcap_vars <- c("record_id", "redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance", "redcap_data_access_group", "redcap_event_name.factor", "redcap_repeat_instrument.factor", "redcap_data_access_group.factor", "redcap_survey_identifier")
+  basic_redcap_vars <- c(id_var, "redcap_event_name", "redcap_repeat_instrument", "redcap_repeat_instance", "redcap_data_access_group", "redcap_event_name.factor", "redcap_repeat_instrument.factor", "redcap_data_access_group.factor", "redcap_survey_identifier")
 
   basic_redcap_vars <- intersect(basic_redcap_vars, names(data))
 
@@ -87,7 +113,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
   actions <- character()
 
   # Check for missing variables in the dataset compared to the dictionary
-  vars_more <- setdiff(dic$field_name, names(data))
+  vars_more <- setdiff(dic$field_name[!dic$field_type %in% "descriptive"], names(data)) # Descriptive fields are never exported with the data
 
   # Handle cases where variables in the dictionary are missing in the dataset
   if (length(vars_more) > 0) {
@@ -100,7 +126,22 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
     other_check_vars <- setdiff(vars_more, check_vars)
 
     if (length(other_check_vars) > 0) {
-      stop("There are variables in the dictionary that are not present in the dataset.\nPlease ensure that the dictionary matches the dataset. Transformation has been halted.", call. = FALSE)
+      shown_vars <- utils::head(other_check_vars, 10)
+
+      # Forms with none of their fields in the data (e.g. data exported with only some instruments)
+      form_fields <- dic[!dic$field_type %in% "descriptive" & dic$field_name != id_var, c("field_name", "form_name")]
+      missing_forms <- unique(form_fields$form_name[form_fields$field_name %in% other_check_vars])
+      missing_forms <- missing_forms[vapply(missing_forms, function(f) all(form_fields$field_name[form_fields$form_name == f] %in% vars_more), logical(1))]
+      forms_code <- paste0("rd_delete_vars(project, forms = ", paste(deparse(missing_forms), collapse = ""), ")")
+
+      rd_abort(
+        c(
+          "{length(other_check_vars)} variable{?s} of the dictionary {?is/are} not in the data: {.var {shown_vars}}.",
+          "i" = if (length(missing_forms) > 0) "If the data was exported without some instruments, remove them first: {.code {forms_code}}.",
+          "i" = "Please ensure that the dictionary matches the dataset. Transformation has been halted."
+        ),
+        class = "REDCapDM_error_data"
+      )
     }
 
   }
@@ -126,17 +167,33 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
       actions <- c(actions, stringr::str_glue("Default REDCap variables ({mss}) detected in the dataset. Please, run: rd_delete_vars(..., pattern = {mss})"))
     }
 
-    fact_vars <- grep(".factor$", vars_less, value = TRUE)
+    # Checkbox fields of the dictionary: only they have options `<field>___<code>` (without the type of the fields,
+    # every field of the dictionary)
+    checkbox_fields <- if ("field_type" %in% names(dic)) dic$field_name[dic$field_type %in% "checkbox"] else dic$field_name
+    is_option <- function(x) grepl("___", x) & sub("___.*$", "", x) %in% checkbox_fields
 
-    # Checkbox vars already identified in the previous step (vars_more)
-    less_check <- grep("___", vars_less, value = TRUE)
+    # Factor versions of the fields of the dictionary (and of their checkbox options) and of the status field of the
+    # forms (`<form>_complete`, also of the forms that redcap_data() removed from the dictionary because they are in no
+    # event)
+    fact_base <- sub("\\.factor$", "", vars_less)
+    # (an exact field of the dictionary first, e.g. `cb___1` after rd_checkbox(checkbox_names = FALSE))
+    fact_vars <- vars_less[grepl("\\.factor$", vars_less) &
+      (fact_base %in% dic$field_name | is_option(fact_base) | grepl("_complete\\.factor$", vars_less))]
+    
+    # Columns with the Missing Data Codes kept by redcap_data(rm_mdc = FALSE)
+    fact_vars <- c(fact_vars, intersect(vars_less, mdc_columns(names(data), dic$field_name)))
+
+    # Checkbox vars already identified in the previous step (vars_more): options of a checkbox field of the dictionary
+    less_check <- vars_less[is_option(vars_less)]
 
     other_less_vars <- setdiff(vars_less, c(patt_vars, fact_vars, less_check))
 
     if (length(other_less_vars) > 0) {
       # General message for other cases
-      stop("There are extra variables in the dataset not found in the dictionary.\nTransformation halted.",
-           call. = FALSE
+      shown_vars <- utils::head(other_less_vars, 10)
+      rd_abort(
+        c("There are extra variables in the dataset not found in the dictionary: {.var {shown_vars}}.", "i" = "Check that the dictionary is the one of this project. Transformation halted."),
+        class = "REDCapDM_error_data"
       )
     }
   }
@@ -144,13 +201,14 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
 
   # single stop with full list (if anything found)
   if (length(actions) > 0) {
-    header <- c(
-      "Detected issues that must be resolved BEFORE running rd_split():",
-      ""
+    rd_abort(
+      c(
+        "Detected issues that must be resolved BEFORE running {.fn rd_split}:",
+        stats::setNames(sprintf("%d. {actions[%d]}", seq_along(actions), seq_along(actions)), rep("x", length(actions))),
+        "i" = "Suggested order: {.code list(data, dic, ...) |> rd_delete_vars(pattern = ...) |> rd_split(...)}"
+      ),
+      class = "REDCapDM_error_data"
     )
-    body <- unlist(lapply(seq_along(actions), function(i) paste0(i, ". ", actions[i])))
-    footer <- c("", "Suggested order: list(data, dic, ...) |> rd_delete_vars(delete_pattern = ...) |> rd_split(...)")
-    stop(paste(c(header, body, footer), collapse = "\n"), call. = FALSE)
   }
 
   if (by == "form") {
@@ -158,8 +216,8 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
     form <- unique(dic$form_name)
     longitudinal <- "redcap_event_name" %in% names(data)
 
-    if (longitudinal & is.null(event_form)) {
-      stop("The event-form correspondence is required to split the data by form in a longitudinal project. Please provide the `event_form` argument to proceed.", call. = FALSE)
+    if (longitudinal && is.null(event_form)) {
+      rd_abort("The event-form correspondence is required to split the data by form in a longitudinal project. Please provide the {.arg event_form} argument to proceed.")
     }
 
     if (longitudinal) {
@@ -168,7 +226,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
           events = purrr::map(.data$form, ~ event_form$unique_event_name[event_form$form == .x]),
           vars = purrr::map(.data$form, ~{
             posible_vars <- dic$field_name[dic$form_name == .x]
-            posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"))
+            posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"), paste0(posible_vars, "_mdc"))
 
             check_df <- tibble::tibble(check_data = names(data)[grep("___", names(data))]) |>
               dplyr::mutate(check_dic = gsub("___.*$", "", check_data)) |>
@@ -199,7 +257,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
         dplyr::mutate(
           vars = purrr::map(.data$form, ~ {
             posible_vars <- dic$field_name[dic$form_name == .x]
-            posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"))
+            posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"), paste0(posible_vars, "_mdc"))
 
             check_df <- tibble::tibble(check_data = names(data)[grep("___", names(data))]) |>
               dplyr::mutate(check_dic = gsub("___.*$", "", check_data)) |>
@@ -221,25 +279,47 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
     }
 
     if (repeat_instrument) {
-      form_check <- data |>
-        dplyr::distinct(dplyr::pick(dplyr::contains("redcap_repeat_instrument")))
+      # The rows of each form are chosen by the code of its repeating instrument (`redcap_repeat_instrument`): several
+      # instruments can have the same label, and an instrument can have different labels. The label (the factor version,
+      # from redcap_data()) is only shown in the rows of the form, when the data has it
+      instrument <- repeat_instrument_values(data)
+      repeating_rows <- !is.na(instrument)
+      repeating_forms <- unique(instrument[repeating_rows])
+      has_label <- "redcap_repeat_instrument.factor" %in% names(data)
+
+      # Events where each form repeats: in the other events, its rows are the normal rows of the record (a form can repeat
+      # only in some events)
+      repeat_events <- function(form) {
+        if (!"redcap_event_name" %in% names(data)) {
+          return(NULL)
+        }
+        unique(data$redcap_event_name[repeating_rows & data$redcap_repeat_instrument %in% form])
+      }
 
       ndata <- ndata |>
-        dplyr::left_join(form_check, by = dplyr::join_by("form" == "redcap_repeat_instrument")) |>
-        dplyr::relocate("form_factor" = "redcap_repeat_instrument.factor", .after = form) |>
-        dplyr::mutate(df = purrr::map2(.data$form_factor, .data$df, ~ {
-          if (is.na(.x)) {
-            .y |>
-              dplyr::filter(is.na(.data$redcap_repeat_instrument.factor)) |>
-              dplyr::select(-dplyr::starts_with("redcap_repeat_instrument"))
+        dplyr::mutate(df = purrr::map2(.data$form, .data$df, function(form, df) {
+          code <- repeat_instrument_values(df)
+          no_instrument <- is.na(code)
+          # (dplyr::slice() keeps the labels of the variables; only the columns of REDCap are removed, not other
+          # columns whose name starts in the same way, e.g. a field `redcap_repeat_instrument_note`)
+          if (!form %in% repeating_forms) {
+            df |>
+              dplyr::slice(which(.env$no_instrument)) |>
+              dplyr::select(-dplyr::any_of(c("redcap_repeat_instrument", "redcap_repeat_instrument.factor")))
           } else {
-            .y |>
-              dplyr::filter(.data$redcap_repeat_instrument.factor == .x) |>
-              dplyr::mutate(redcap_repeat_instrument = redcap_repeat_instrument.factor) |>
+            events <- repeat_events(form)
+            normal <- if (is.null(events)) rep(FALSE, nrow(df)) else no_instrument & !df$redcap_event_name %in% events
+            rows_kept <- normal | (!no_instrument & code %in% form)
+            df <- df |>
+              dplyr::slice(which(.env$rows_kept))
+            if (has_label) {
+              # (the code of the instrument where its label is missing or empty)
+              df$redcap_repeat_instrument <- instrument_labels(df)
+            }
+            df |>
               dplyr::select(-dplyr::any_of("redcap_repeat_instrument.factor"))
           }
-        })) |>
-        dplyr::select(-"form_factor")
+        }))
     }
 
     if (wide) {
@@ -255,39 +335,35 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
         dplyr::mutate(
           max_repeated_instance = purrr::map_dbl(
             .data$df,
-            ~.x |>
-              dplyr::group_by(.data$record_id) |>
-              dplyr::mutate(id = seq_along(.data$record_id),
-                            max_id = n()) |>
-              dplyr::ungroup() |>
-              dplyr::pull(max_id) |>
-              max()
+            # Most rows of a record (0 when the form has no rows, e.g. a project without records)
+            ~ max(0, tabulate(match(.x[[id_var]], unique(.x[[id_var]]))))
           ),
-          df = if (longitudinal) {
-            purrr::pmap(list(.data$vars, .data$df, .data$events), function(x, y, z) {
+          df = purrr::pmap(list(.data$vars, .data$df, if (longitudinal) .data$events else as.list(rep(NA, dplyr::n()))), function(x, y, z) {
 
+            y <- y |>
+              dplyr::select(dplyr::any_of(c(id_var, setdiff(x, basic_redcap_vars))))
+
+            # A form with only the record identifier (e.g. the identifier alone in its form, collected in several events):
+            # one row per record, without columns to number
+            if (identical(names(y), id_var)) {
+              return(y |> dplyr::slice(which(!duplicated(y[[id_var]]))))
+            }
+
+            # One row per record: the rows of a record (events, instances of a repeated instrument or event) become numbered columns
+            if (dplyr::n_distinct(z) > 1 || any(duplicated(y[[id_var]]))) {
+
+              # (the number of each row of a record, in a column whose name isn't one of the data, e.g. a field `id`)
+              number <- utils::tail(make.unique(c(names(y), ".rd_number")), 1)
+              y[[number]] <- stats::ave(seq_len(nrow(y)), match(y[[id_var]], unique(y[[id_var]])), FUN = seq_along)
               y <- y |>
-                dplyr::select(dplyr::all_of(c("record_id", x)))
+                # (`<variable>_<number>`, also when the form has only one variable)
+                tidyr::pivot_wider(names_from = dplyr::all_of(number), values_from = -dplyr::all_of(c(id_var, number)), names_glue = paste0("{.value}_{", number, "}"))
+            }
 
-              if(dplyr::n_distinct(z) > 1) {
-
-                y <- y |>
-                  dplyr::group_by(.data$record_id) |>
-                  dplyr::mutate(id = seq_along(.data$record_id)) |>
-                  dplyr::ungroup() |>
-                  tidyr::pivot_wider(names_from = "id", values_from = -c("record_id", "id"))
-              }
-
-              return(y)
-            })
-          } else {
-            purrr::map2(.data$vars, .data$df, function(x, y) {
-              y |>
-                dplyr::select(dplyr::all_of(c("record_id", x)))
-            })
-          }
+            return(y)
+          })
         ) |>
-        dplyr::relocate(.data$max_repeated_instance, .before = .data$vars)
+        dplyr::relocate("max_repeated_instance", .before = "vars")
     }
   } else if (by == "event") {
 
@@ -297,7 +373,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
         redcap_event_name = purrr::map(.data$form_name, ~ event_form$unique_event_name[event_form$form == .x]),
         vars = purrr::map(.data$form_name, ~{
           posible_vars <- dic$field_name[dic$form_name == .x]
-          posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"))
+          posible_vars <- c(posible_vars, paste0(posible_vars, ".factor"), paste0(posible_vars, "_mdc"))
 
           check_df <- tibble::tibble(check_data = names(data)[grep("___", names(data))]) |>
             dplyr::mutate(check_dic = gsub("___.*$", "", check_data)) |>
@@ -314,10 +390,10 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
         }
         )
       ) |>
-      tidyr::unnest(.data$redcap_event_name) |>
-      tidyr::unnest(.data$vars) |>
+      tidyr::unnest("redcap_event_name") |>
+      tidyr::unnest("vars") |>
       dplyr::distinct(.data$redcap_event_name, field_name = .data$vars) |>
-      dplyr::filter(.data$field_name != "record_id") |>
+      dplyr::filter(.data$field_name != id_var) |>
       tibble::as_tibble()
 
     var_event_add <- data.frame(redcap_event_name = NA, field_name = basic_redcap_vars)
@@ -343,7 +419,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
       )
 
   } else {
-    stop("Invalid `by` argument. Please specify either 'form' or 'event'.")
+    rd_abort("Invalid {.arg by} argument. Please specify either {.val form} or {.val event}.", class = "REDCapDM_error_argument")
   }
 
   # Order columns
@@ -360,22 +436,20 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
   # Handle the `which` argument if provided
   if (!is.null(which)) {
     if (length(which) > 1) {
-      warning("The `which` argument is designed to specify a single form or event. Multiple inputs were provided; only the first will be used.")
+      rd_warn("The {.arg which} argument is designed to specify a single form or event. Multiple inputs were provided; only the first will be used.")
 
       which <- which[1]
     }
 
     if (by == "form") {
       if(!which %in% form){
-        stop("The form specified in the `which` argument was not found in this project.\n",
-             "Please select one of the available REDCap forms:\n", paste0("-", form, "\n"), call. = FALSE)
+        rd_abort(c("The form specified in the {.arg which} argument was not found in this project.", "i" = "Please select one of the available REDCap forms: {.val {form}}."), class = "REDCapDM_error_argument")
       }
     }
 
     if (by == "event") {
       if(!which %in% list_events){
-        stop("The event specified in the `which` argument was not found in this project.\n",
-             "Please select one of the available REDCap events:\n", paste0("-", list_events, "\n"), call. = FALSE)
+        rd_abort(c("The event specified in the {.arg which} argument was not found in this project.", "i" = "Please select one of the available REDCap events: {.val {list_events}}."), class = "REDCapDM_error_argument")
       }
     }
 
@@ -391,7 +465,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
 
   # Update results with the this transformation
   if (is.null(results)) {
-    results <- c(results, stringr::str_glue("Final arrangment of the data by {by}. (rd_split)\n"))
+    results <- c(results, stringr::str_glue("Final arrangement of the data by {by}. (rd_split)\n"))
   } else {
 
     if(grepl("^[A-Z]", results[1])) {
@@ -405,7 +479,7 @@ rd_split <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL,
       stringr::str_remove("\\.") |>
       as.numeric()
 
-    results <- c(results, stringr::str_glue("\n\n{last_val_res + 1}. Final arrangment of the data by {by}. (rd_split)\n"))
+    results <- c(results, stringr::str_glue("\n\n{last_val_res + 1}. Final arrangement of the data by {by}. (rd_split)\n"))
   }
 
   # Return the modified data, dictionary, event_form, and results

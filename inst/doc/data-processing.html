@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Process REDCap data</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Process REDCap data</h1>
+
+
+<div id="TOC">
+<ul>
+<li><a href="#rd_delete_vars" id="toc-rd_delete_vars"><span class="toc-section-number">1</span>
+<strong>rd_delete_vars</strong></a></li>
+<li><a href="#rd_dates" id="toc-rd_dates"><span class="toc-section-number">2</span> <strong>rd_dates</strong></a></li>
+<li><a href="#rd_recalculate" id="toc-rd_recalculate"><span class="toc-section-number">3</span>
+<strong>rd_recalculate</strong></a></li>
+<li><a href="#rd_checkbox" id="toc-rd_checkbox"><span class="toc-section-number">4</span>
+<strong>rd_checkbox</strong></a></li>
+<li><a href="#rd_factor" id="toc-rd_factor"><span class="toc-section-number">5</span> <strong>rd_factor</strong></a></li>
+<li><a href="#rd_dictionary" id="toc-rd_dictionary"><span class="toc-section-number">6</span>
+<strong>rd_dictionary</strong></a></li>
+<li><a href="#rd_split" id="toc-rd_split"><span class="toc-section-number">7</span> <strong>rd_split</strong></a></li>
+<li><a href="#rd_insert_na" id="toc-rd_insert_na"><span class="toc-section-number">8</span>
+<strong>rd_insert_na</strong></a></li>
+<li><a href="#rd_rlogic" id="toc-rd_rlogic"><span class="toc-section-number">9</span> <strong>rd_rlogic</strong></a></li>
+<li><a href="#rd_transform" id="toc-rd_transform"><span class="toc-section-number">10</span>
+<strong>rd_transform</strong></a></li>
+</ul>
+</div>
+
+<p>The examples use <code>covican</code>, the dataset included in the
+package (described in <code>vignette(&quot;REDCapDM&quot;)</code>).</p>
+<p>For a project assembled from separate data frames, keep the record
+identifier as the first field of the dictionary, even if its column is
+moved in the dataset. The processing functions use that field when the
+identifier is not named <code>record_id</code>.</p>
+<p>Given any data imported from REDCap with <code>redcap_data()</code>,
+this would be the pipeline of an entire processing workflow:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a>dataset <span class="sc">|&gt;</span> </span>
+<span id="cb1-2"><a href="#cb1-2" tabindex="-1"></a>    <span class="fu">rd_delete_vars</span>(<span class="at">pattern =</span> <span class="fu">c</span>(<span class="st">&quot;_complete&quot;</span>, <span class="st">&quot;_timestamp&quot;</span>)) <span class="sc">|&gt;</span></span>
+<span id="cb1-3"><a href="#cb1-3" tabindex="-1"></a>    <span class="fu">rd_dates</span>() <span class="sc">|&gt;</span></span>
+<span id="cb1-4"><a href="#cb1-4" tabindex="-1"></a>    <span class="fu">rd_recalculate</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb1-5"><a href="#cb1-5" tabindex="-1"></a>    <span class="fu">rd_checkbox</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb1-6"><a href="#cb1-6" tabindex="-1"></a>    <span class="fu">rd_factor</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb1-7"><a href="#cb1-7" tabindex="-1"></a>    <span class="fu">rd_dictionary</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb1-8"><a href="#cb1-8" tabindex="-1"></a>    <span class="fu">rd_split</span>(<span class="at">by =</span> <span class="st">&quot;event&quot;</span>) <span class="co"># use &quot;form&quot; if not longitudinal</span></span></code></pre></div>
+<p>All functions are optional and should only be used at the user’s
+discretion when necessary. The order of some functions can also be
+exchanged. All the functions that can be used in each step of a
+processing workflow are detailed below.</p>
+<div id="rd_delete_vars" class="section level1" number="1">
+<h1><span class="header-section-number">1</span>
+<strong>rd_delete_vars</strong></h1>
+<p>This function removes unwanted variables from both a REDCap dataset
+and its dictionary. This is especially useful for eliminating
+automatically generated fields such as form completion flags
+(<code>*_complete</code>) or timestamps (<code>*_timestamp</code>).</p>
+<p>You can delete variables by specifying their exact names, by using
+regular expression patterns or by choosing whole forms:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="co"># Option A: delete by variable name</span></span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>covican_deleted <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>  <span class="fu">rd_delete_vars</span>(<span class="at">vars =</span> <span class="fu">c</span>(<span class="st">&quot;potassium&quot;</span>, <span class="st">&quot;leuk_lymph&quot;</span>))</span>
+<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a><span class="co"># Option B: delete by regex pattern (here, the inclusion and exclusion criteria)</span></span>
+<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a>covican_deleted <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>  <span class="fu">rd_delete_vars</span>(<span class="at">pattern =</span> <span class="fu">c</span>(<span class="st">&quot;^inc_&quot;</span>, <span class="st">&quot;^exc_&quot;</span>))</span>
+<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a><span class="co"># Option C: delete every variable of a form</span></span>
+<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>covican_deleted <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>  <span class="fu">rd_delete_vars</span>(<span class="at">forms =</span> <span class="st">&quot;laboratory_findings&quot;</span>)</span></code></pre></div>
+<p>When variables are deleted:</p>
+<ul>
+<li><p>They are removed from both the dataset and dictionary.</p></li>
+<li><p>Factor versions of deleted variables (if present) are also
+removed.</p></li>
+<li><p>If a pattern doesn’t match any variable, a warning tells you that
+nothing was removed. The columns that REDCap uses for the record
+identifier, the events and the repetitions are never removed by a
+pattern.</p></li>
+<li><p>With <code>forms</code>, the checkbox options, recalculated
+versions (<code>_recalc</code>) and the
+<code>_complete</code>/<code>_timestamp</code> fields of the form are
+removed too, and the form is removed from the event-form mapping. The
+record identifier is always kept.</p></li>
+</ul>
+<p><br></p>
+</div>
+<div id="rd_dates" class="section level1" number="2">
+<h1><span class="header-section-number">2</span>
+<strong>rd_dates</strong></h1>
+<p>This function is designed to process and standardize
+<code>date</code> and <code>datetime</code> fields in a REDCap dataset.
+In REDCap projects, date and datetime fields can sometimes be stored as
+character strings, which can make analyses difficult. This function
+detects which fields should be dates/datetimes from the REDCap
+dictionary and converts them to <code>Date</code> and
+<code>POSIXct</code>, respectively. Datetimes written as text are parsed
+in UTC, preserving the clock time written in REDCap; existing
+<code>POSIXct</code> columns keep their time zone.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>covican_dates <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a>  <span class="fu">rd_dates</span>()</span></code></pre></div>
+<p>Quick verification example:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a><span class="co"># Simulate a character date since covican already has the dates in the correct format</span></span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a>covican_dates <span class="ot">&lt;-</span> covican</span>
+<span id="cb4-3"><a href="#cb4-3" tabindex="-1"></a>covican_dates<span class="sc">$</span>data <span class="ot">&lt;-</span> covican_dates<span class="sc">$</span>data <span class="sc">|&gt;</span> </span>
+<span id="cb4-4"><a href="#cb4-4" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(<span class="at">d_birth =</span> <span class="fu">as.character</span>(d_birth))</span>
+<span id="cb4-5"><a href="#cb4-5" tabindex="-1"></a><span class="co"># Check class before conversion</span></span>
+<span id="cb4-6"><a href="#cb4-6" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" tabindex="-1"></a><span class="fu">class</span>(covican_dates<span class="sc">$</span>data<span class="sc">$</span>d_birth)</span>
+<span id="cb4-8"><a href="#cb4-8" tabindex="-1"></a><span class="co">#&gt; [1] &quot;character&quot;</span></span>
+<span id="cb4-9"><a href="#cb4-9" tabindex="-1"></a></span>
+<span id="cb4-10"><a href="#cb4-10" tabindex="-1"></a><span class="co"># Check class after conversion</span></span>
+<span id="cb4-11"><a href="#cb4-11" tabindex="-1"></a>covican_dates <span class="ot">&lt;-</span> covican_dates <span class="sc">|&gt;</span> </span>
+<span id="cb4-12"><a href="#cb4-12" tabindex="-1"></a>  <span class="fu">rd_dates</span>()</span>
+<span id="cb4-13"><a href="#cb4-13" tabindex="-1"></a><span class="fu">class</span>(covican_dates<span class="sc">$</span>data<span class="sc">$</span>d_birth)</span>
+<span id="cb4-14"><a href="#cb4-14" tabindex="-1"></a><span class="co">#&gt; [1] &quot;Date&quot;</span></span></code></pre></div>
+<p>After this transformation, all <code>date</code> and
+<code>datetime</code> variables are standardized and ready for analysis
+in R.</p>
+<p><br></p>
+</div>
+<div id="rd_recalculate" class="section level1" number="3">
+<h1><span class="header-section-number">3</span>
+<strong>rd_recalculate</strong></h1>
+<p>This function identifies calculated fields in a REDCap project,
+translates their calculation logic into R, recalculates the values, and
+compares the results with the values stored in REDCap.</p>
+<p>It then produces a structured report that helps users detect
+discrepancies between REDCap’s stored calculations and the values
+recalculated in R.</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" tabindex="-1"></a>covican_recalc <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb5-2"><a href="#cb5-2" tabindex="-1"></a>  <span class="fu">rd_recalculate</span>()</span>
+<span id="cb5-3"><a href="#cb5-3" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" tabindex="-1"></a><span class="co"># Print recalculation results</span></span>
+<span id="cb5-5"><a href="#cb5-5" tabindex="-1"></a>covican_recalc<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>## Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;. (rd_recalculate)
+## 
+## 
+## | Total calculated fields | Non-transcribed fields | Fields with different recalculated values |
+## |:-----------------------:|:----------------------:|:-----------------------------------------:|
+## |            2            |         0 (0%)         |                  1 (50%)                  |
+## 
+## 
+## |     field_name      | Transcribed? | Is equal? | Different values |
+## |:-------------------:|:------------:|:---------:|:----------------:|
+## |         age         |     Yes      |   FALSE   |        1         |
+## | screening_fail_crit |     Yes      |   TRUE    |        0         |</code></pre>
+<p>The <code>results</code> object includes:</p>
+<ul>
+<li><p>A summary report outlining the total number of calculated fields,
+how many were successfully transcribed into R, and how many showed
+differences between the REDCap values and the recalculated
+ones.</p></li>
+<li><p>A field-level report listing each calculated field, whether the
+logic was successfully converted to R, whether the recalculated values
+match the originals and how many values are different.</p></li>
+</ul>
+<p>You can also exclude specific fields from recalculation (e.g.,
+complex multi-event calculations) to reduce computation time and avoid
+unnecessary warnings.</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" tabindex="-1"></a><span class="co"># Exclude specific variables from recalculation</span></span>
+<span id="cb7-2"><a href="#cb7-2" tabindex="-1"></a>covican_recalc <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb7-3"><a href="#cb7-3" tabindex="-1"></a>  <span class="fu">rd_recalculate</span>(<span class="at">exclude =</span> <span class="st">&quot;screening_fail_crit&quot;</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" tabindex="-1"></a>covican_recalc<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>## Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;. (rd_recalculate)
+## 
+## 
+## | Total calculated fields | Non-transcribed fields | Fields with different recalculated values |
+## |:-----------------------:|:----------------------:|:-----------------------------------------:|
+## |            1            |         0 (0%)         |                 1 (100%)                  |
+## 
+## 
+## | field_name | Transcribed? | Is equal? | Different values |
+## |:----------:|:------------:|:---------:|:----------------:|
+## |    age     |     Yes      |   FALSE   |        1         |</code></pre>
+<p>After running this function:</p>
+<ul>
+<li><p>For each calculated field whose recalculated values are different
+from the values of REDCap, a new variable with the suffix
+<code>_recalc</code> is added to the dataset, placed immediately after
+the original variable and containing the recalculated values.</p></li>
+<li><p>The data dictionary is updated with a corresponding entry, where
+the original variable label is extended with
+<code>&quot;(Recalculated)&quot;</code> to make these fields easy to
+identify.</p></li>
+</ul>
+<p>The recalculation gives the same results if the variables used in the
+calculations have already been converted to factors with
+<code>rd_factor()</code>. Running the function again on its own output
+updates the <code>_recalc</code> variables instead of duplicating
+them.</p>
+<p><br></p>
+</div>
+<div id="rd_checkbox" class="section level1" number="4">
+<h1><span class="header-section-number">4</span>
+<strong>rd_checkbox</strong></h1>
+<p>This function cleans and restructures REDCap checkbox fields. It
+converts the default <code>&quot;Unchecked/Checked&quot;</code> categories of
+checkbox responses created by REDCap into user-specified labels (default
+<code>&quot;No&quot;/&quot;Yes&quot;</code>) and renames the <code>varname___code</code>
+variables (original REDCap structure) to readable names based on the
+text of the checkbox options. Additionally, it updates the dictionary to
+match the new variable names. This includes choices, calculations, and
+branching logic.</p>
+<div class="sourceCode" id="cb9"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" tabindex="-1"></a><span class="co"># Default transformation: &quot;No&quot;/&quot;Yes&quot; labels &amp; renamed variables</span></span>
+<span id="cb9-2"><a href="#cb9-2" tabindex="-1"></a>cb <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb9-3"><a href="#cb9-3" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>()</span>
+<span id="cb9-4"><a href="#cb9-4" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" tabindex="-1"></a><span class="fu">str</span>(cb<span class="sc">$</span>data<span class="sc">$</span>underlying_disease_hemato_acute_myeloid_leukemia.factor)</span></code></pre></div>
+<pre><code>##  Factor w/ 2 levels &quot;No&quot;,&quot;Yes&quot;: 1 NA 1 NA 1 NA 1 NA 1 NA ...
+##  - attr(*, &quot;label&quot;)= chr &quot;&quot;</code></pre>
+<p>For example, consider the checkbox field of the type of underlying
+disease present in the <code>covican</code> dataset. Originally, the
+variables were named <code>type_underlying_disease___0</code> and
+<code>type_underlying_disease___1</code>, while the option labels were
+‘Haematological cancer’ and ‘Solid tumour’. After running the function,
+the variables are renamed to
+<code>type_underlying_disease_haematological_cancer</code> and
+<code>type_underlying_disease_solid_tumour</code>, reflecting the option
+text in a readable format.</p>
+<p>To preserve the original REDCap-style names (e.g.,
+<code>varname___1</code>, <code>varname___2</code>) instead of renaming
+variables based on option text:</p>
+<div class="sourceCode" id="cb11"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" tabindex="-1"></a><span class="co"># use the argument checkbox_names to choose the final format of the variable names</span></span>
+<span id="cb11-2"><a href="#cb11-2" tabindex="-1"></a>cb <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb11-3"><a href="#cb11-3" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>(<span class="at">checkbox_names =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb11-4"><a href="#cb11-4" tabindex="-1"></a></span>
+<span id="cb11-5"><a href="#cb11-5" tabindex="-1"></a><span class="fu">str</span>(cb<span class="sc">$</span>data<span class="sc">$</span>underlying_disease_hemato___1)</span></code></pre></div>
+<pre><code>##  num [1:342] 0 NA 0 NA 0 NA 0 NA 0 NA ...
+##  - attr(*, &quot;label&quot;)= chr &quot;Specify underlying disease (choice=Acute myeloid leukemia)&quot;</code></pre>
+<p>In this case, each option becomes a field of the dictionary of its
+own, so running <code>rd_checkbox()</code> again on the result stops
+with an error instead of converting them again. As the data of
+<code>redcap_data()</code> has the <code>.factor</code> versions of the
+options, the columns keep their codes 0/1 (as above) and their
+<code>.factor</code> versions take the labels; without the
+<code>.factor</code> versions, the values of the columns become the
+labels.</p>
+<p>If a checkbox field has a branching logic, the <code>na_logic</code>
+argument controls how missing values are set, with the following
+options:</p>
+<ul>
+<li><p><code>&quot;none&quot;</code>: do not set <code>NA</code> based on
+branching logic.</p></li>
+<li><p><code>&quot;missing&quot;</code> (default): set <code>NA</code> only where
+the branching logic evaluation is <code>NA</code>.</p></li>
+<li><p><code>&quot;eval&quot;</code>: set <code>NA</code> where the branching
+logic evaluates to <code>FALSE</code> or <code>NA</code> (i.e., logic
+not satisfied or missing).</p></li>
+</ul>
+<div class="sourceCode" id="cb13"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" tabindex="-1"></a>cb <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb13-2"><a href="#cb13-2" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>(<span class="at">na_logic =</span> <span class="st">&quot;eval&quot;</span>)</span></code></pre></div>
+<p>By default, checkbox factors are labeled <code>&quot;No&quot;</code> and
+<code>&quot;Yes&quot;</code>, but you can specify alternative labels:</p>
+<div class="sourceCode" id="cb14"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" tabindex="-1"></a>cb <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb14-2"><a href="#cb14-2" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>(<span class="at">checkbox_labels =</span> <span class="fu">c</span>(<span class="st">&quot;Absent&quot;</span>, <span class="st">&quot;Present&quot;</span>))</span>
+<span id="cb14-3"><a href="#cb14-3" tabindex="-1"></a></span>
+<span id="cb14-4"><a href="#cb14-4" tabindex="-1"></a><span class="fu">str</span>(cb<span class="sc">$</span>data<span class="sc">$</span>underlying_disease_hemato_acute_myeloid_leukemia.factor)</span></code></pre></div>
+<pre><code>##  Factor w/ 2 levels &quot;Absent&quot;,&quot;Present&quot;: 1 NA 1 NA 1 NA 1 NA 1 NA ...
+##  - attr(*, &quot;label&quot;)= chr &quot;&quot;</code></pre>
+<p><br></p>
+</div>
+<div id="rd_factor" class="section level1" number="5">
+<h1><span class="header-section-number">5</span>
+<strong>rd_factor</strong></h1>
+<p>This function converts categorical variables in a REDCap dataset into
+R factors by replacing each original variable (numeric version) with its
+corresponding <code>.factor</code> version created by REDCap. If a
+<code>.factor</code> column is text instead of a factor (e.g. after
+modifying the data), it is converted to a factor with the levels in the
+order of the options of the dictionary.</p>
+<div class="sourceCode" id="cb16"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" tabindex="-1"></a>factored <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb16-2"><a href="#cb16-2" tabindex="-1"></a>  <span class="fu">rd_factor</span>()</span>
+<span id="cb16-3"><a href="#cb16-3" tabindex="-1"></a></span>
+<span id="cb16-4"><a href="#cb16-4" tabindex="-1"></a><span class="co"># Checking class of the variable</span></span>
+<span id="cb16-5"><a href="#cb16-5" tabindex="-1"></a><span class="fu">str</span>(factored<span class="sc">$</span>data<span class="sc">$</span>available_analytics)</span></code></pre></div>
+<pre><code>##  Factor w/ 2 levels &quot;No&quot;,&quot;Yes&quot;: 2 2 2 2 2 1 2 NA 2 1 ...
+##  - attr(*, &quot;label&quot;)= chr &quot;Blood test available? (+/- 72h)&quot;</code></pre>
+<p>If you need to keep certain variables in their raw form, you can list
+them in the <code>exclude</code> argument. This prevents those variables
+from being replaced (including their <code>.factor</code> version) while
+still allowing the rest of the dataset to be converted.</p>
+<div class="sourceCode" id="cb18"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" tabindex="-1"></a>factored <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb18-2"><a href="#cb18-2" tabindex="-1"></a>  <span class="fu">rd_factor</span>(<span class="at">exclude =</span> <span class="fu">c</span>(<span class="st">&quot;available_analytics&quot;</span>, <span class="st">&quot;urine_culture&quot;</span>))</span>
+<span id="cb18-3"><a href="#cb18-3" tabindex="-1"></a></span>
+<span id="cb18-4"><a href="#cb18-4" tabindex="-1"></a><span class="co"># The excluded variables keep both versions</span></span>
+<span id="cb18-5"><a href="#cb18-5" tabindex="-1"></a><span class="fu">str</span>(factored<span class="sc">$</span>data<span class="sc">$</span>available_analytics)</span></code></pre></div>
+<pre><code>##  &#39;labelled&#39; int [1:342] 1 1 1 1 1 0 1 NA 1 0 ...
+##  - attr(*, &quot;label&quot;)= chr &quot;Blood test available? (+/- 72h)&quot;</code></pre>
+<div class="sourceCode" id="cb20"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" tabindex="-1"></a><span class="fu">str</span>(factored<span class="sc">$</span>data<span class="sc">$</span>available_analytics.factor)</span></code></pre></div>
+<pre><code>##  Factor w/ 2 levels &quot;No&quot;,&quot;Yes&quot;: 2 2 2 2 2 1 2 NA 2 1 ...
+##  - attr(*, &quot;label&quot;)= chr &quot;&quot;</code></pre>
+<blockquote>
+<p>Note: the function automatically excludes these system variables from
+conversion: <code>redcap_event_name</code>,
+<code>redcap_repeat_instrument</code>,
+<code>redcap_data_access_group</code>. These variables are retained
+as-is to avoid interfering with longitudinal event mappings or user
+access groups.</p>
+</blockquote>
+<p>After conversion, the converted variables are factors and their
+<code>.factor</code> versions are removed. The variables in
+<code>exclude</code>, the system variables above and the variables whose
+labels are of several codes (e.g. two options with the same label, which
+<code>rd_factor()</code> reports with a warning) keep both columns.</p>
+<blockquote>
+<p>Note: use <code>rd_factor()</code> before
+<code>rd_dictionary()</code>. The branching logic and calculations
+translated to R by <code>rd_dictionary()</code> compare the variables
+with their original codes, so they stop working once the variables are
+factors. If <code>rd_factor()</code> detects this situation, it shows a
+warning.</p>
+</blockquote>
+<p><br></p>
+</div>
+<div id="rd_dictionary" class="section level1" number="6">
+<h1><span class="header-section-number">6</span>
+<strong>rd_dictionary</strong></h1>
+<p>When working with REDCap exports, the data dictionary contains field
+metadata, branching logic, and calculation rules written in REDCap
+logic. The <code>rd_dictionary()</code> function refreshes branching
+logic and calculations, translating them from REDCap logic into R logic,
+and ensures the dictionary remains consistent with the cleaned
+dataset.</p>
+<div class="sourceCode" id="cb22"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" tabindex="-1"></a><span class="co"># Update dictionary after cleaning</span></span>
+<span id="cb22-2"><a href="#cb22-2" tabindex="-1"></a>dict_result <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span></span>
+<span id="cb22-3"><a href="#cb22-3" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>() <span class="sc">|&gt;</span></span>
+<span id="cb22-4"><a href="#cb22-4" tabindex="-1"></a>  <span class="fu">rd_factor</span>() <span class="sc">|&gt;</span></span>
+<span id="cb22-5"><a href="#cb22-5" tabindex="-1"></a>  <span class="fu">rd_dictionary</span>()</span></code></pre></div>
+<p>When we transform the dictionary:</p>
+<ul>
+<li><p>Updates branching logic expressions so they match factor labels
+rather than numeric codes.</p></li>
+<li><p>Converts calculations and logic into R-friendly
+expressions.</p></li>
+<li><p>Reports any fields where branching logic or calculations could
+not be converted.</p></li>
+</ul>
+<p><br></p>
+</div>
+<div id="rd_split" class="section level1" number="7">
+<h1><span class="header-section-number">7</span>
+<strong>rd_split</strong></h1>
+<p>After preparing your dataset, you may want to work with only one form
+or one event at a time. The <code>rd_split()</code> function separates
+your dataset accordingly.</p>
+<ul>
+<li><strong>By form</strong></li>
+</ul>
+<p>For non-longitudinal projects (or longitudinal projects with an
+<code>event_form</code> mapping), you can split the dataset into smaller
+datasets based on forms.</p>
+<div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a>forms_data <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span></span>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a>  <span class="fu">rd_split</span>(<span class="at">by =</span> <span class="st">&quot;form&quot;</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a>forms_data<span class="sc">$</span>data</span></code></pre></div>
+<pre><code>## # A tibble: 7 × 3
+##   form                        events    df             
+##   &lt;chr&gt;                       &lt;list&gt;    &lt;list&gt;         
+## 1 inclusionexclusion_criteria &lt;chr [1]&gt; &lt;df [190 × 14]&gt;
+## 2 demographics                &lt;chr [1]&gt; &lt;df [190 × 8]&gt; 
+## 3 comorbidities               &lt;chr [1]&gt; &lt;df [190 × 15]&gt;
+## 4 cancer                      &lt;chr [1]&gt; &lt;df [190 × 27]&gt;
+## 5 vital_signs                 &lt;chr [2]&gt; &lt;df [342 × 7]&gt; 
+## 6 laboratory_findings         &lt;chr [2]&gt; &lt;df [342 × 8]&gt; 
+## 7 microbiological_studies     &lt;chr [1]&gt; &lt;df [190 × 7]&gt;</code></pre>
+<p>The result is a tibble with one row per form, and the dataset of each
+form is in its list-column <code>df</code>. For example, the dataset of
+the first form:</p>
+<div class="sourceCode" id="cb25"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" tabindex="-1"></a><span class="fu">head</span>(forms_data<span class="sc">$</span>data<span class="sc">$</span>df[[<span class="dv">1</span>]])</span></code></pre></div>
+<pre><code>##   record_id    redcap_event_name redcap_data_access_group
+## 1     100-6 baseline_visit_arm_1              hospital_11
+## 2    100-13 baseline_visit_arm_1              hospital_11
+## 3    100-16 baseline_visit_arm_1              hospital_11
+## 4    100-31 baseline_visit_arm_1              hospital_11
+## 5    100-34 baseline_visit_arm_1              hospital_11
+## 6    100-36 baseline_visit_arm_1              hospital_11
+##   redcap_event_name.factor redcap_data_access_group.factor inc_1 inc_2 inc_3
+## 1           Baseline visit                     Hospital 11     1     1     1
+## 2           Baseline visit                     Hospital 11     1     1     1
+## 3           Baseline visit                     Hospital 11     1     1     1
+## 4           Baseline visit                     Hospital 11     1     1     1
+## 5           Baseline visit                     Hospital 11     1     1     1
+## 6           Baseline visit                     Hospital 11     1     1     1
+##   exc_1 screening_fail_crit inc_1.factor inc_2.factor inc_3.factor exc_1.factor
+## 1     0                   0          Yes          Yes          Yes           No
+## 2     0                   0          Yes          Yes          Yes           No
+## 3     0                   0          Yes          Yes          Yes           No
+## 4     0                   0          Yes          Yes          Yes           No
+## 5     0                   0          Yes          Yes          Yes           No
+## 6     0                   0          Yes          Yes          Yes           No</code></pre>
+<p>If repeated entries exist, you can reshape the data into wide
+format:</p>
+<div class="sourceCode" id="cb27"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" tabindex="-1"></a>forms_data <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span></span>
+<span id="cb27-2"><a href="#cb27-2" tabindex="-1"></a>  <span class="fu">rd_split</span>(<span class="at">by =</span> <span class="st">&quot;form&quot;</span>, <span class="at">wide =</span> <span class="cn">TRUE</span>)</span></code></pre></div>
+<p>With <code>wide = TRUE</code>, the result also has the column
+<code>max_repeated_instance</code>: the largest number of rows of a
+record in each form (its events and repetitions), which is the number of
+the last set of columns. It is not the number of the instance: the
+columns are numbered by the position of each row of the record (e.g. a
+record with the instances 2 and 5 has the columns <code>_1</code> and
+<code>_2</code>, and its maximum is 2).</p>
+<blockquote>
+<p>Note: For longitudinal projects, the column <code>events</code> has
+the events where each form is collected.</p>
+</blockquote>
+<blockquote>
+<p>Note: the columns of the data must be fields of the dictionary, their
+<code>.factor</code> and <code>_mdc</code> versions, the options of the
+checkbox fields or the <code>.factor</code> version of the status of the
+forms. Any other column stops the function with an error that names it,
+so that it isn’t left out of the result without notice.</p>
+</blockquote>
+<ul>
+<li><strong>By event</strong></li>
+</ul>
+<p>For longitudinal projects, you can also split the data by event. The
+function uses the <code>event_form</code> mapping to assign variables
+correctly to each event:</p>
+<div class="sourceCode" id="cb28"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" tabindex="-1"></a>events_data <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span></span>
+<span id="cb28-2"><a href="#cb28-2" tabindex="-1"></a>  <span class="fu">rd_split</span>(<span class="at">by =</span> <span class="st">&quot;event&quot;</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" tabindex="-1"></a></span>
+<span id="cb28-4"><a href="#cb28-4" tabindex="-1"></a>events_data<span class="sc">$</span>data</span></code></pre></div>
+<pre><code>## # A tibble: 2 × 2
+##   events                   df             
+##   &lt;chr&gt;                    &lt;list&gt;         
+## 1 baseline_visit_arm_1     &lt;df [190 × 56]&gt;
+## 2 follow_up_visit_da_arm_1 &lt;df [152 × 10]&gt;</code></pre>
+<p>If you want to extract only one form or event, use the
+<code>which</code> argument:</p>
+<div class="sourceCode" id="cb30"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" tabindex="-1"></a><span class="co"># Example by form</span></span>
+<span id="cb30-2"><a href="#cb30-2" tabindex="-1"></a>baseline_data <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span></span>
+<span id="cb30-3"><a href="#cb30-3" tabindex="-1"></a>  <span class="fu">rd_split</span>(<span class="at">by =</span> <span class="st">&quot;form&quot;</span>, <span class="at">which =</span> <span class="st">&quot;demographics&quot;</span>)</span>
+<span id="cb30-4"><a href="#cb30-4" tabindex="-1"></a></span>
+<span id="cb30-5"><a href="#cb30-5" tabindex="-1"></a><span class="fu">head</span>(baseline_data<span class="sc">$</span>data)</span></code></pre></div>
+<pre><code>##   record_id    redcap_event_name redcap_data_access_group
+## 1     100-6 baseline_visit_arm_1              hospital_11
+## 2    100-13 baseline_visit_arm_1              hospital_11
+## 3    100-16 baseline_visit_arm_1              hospital_11
+## 4    100-31 baseline_visit_arm_1              hospital_11
+## 5    100-34 baseline_visit_arm_1              hospital_11
+## 6    100-36 baseline_visit_arm_1              hospital_11
+##   redcap_event_name.factor redcap_data_access_group.factor    d_birth
+## 1           Baseline visit                     Hospital 11 1963-10-05
+## 2           Baseline visit                     Hospital 11 1959-10-04
+## 3           Baseline visit                     Hospital 11 1951-04-08
+## 4           Baseline visit                     Hospital 11 1944-08-08
+## 5           Baseline visit                     Hospital 11 1954-12-02
+## 6           Baseline visit                     Hospital 11 1952-05-08
+##   d_admission age
+## 1  2020-04-12  56
+## 2  2020-02-13  60
+## 3  2020-03-08  68
+## 4  2020-02-23  75
+## 5  2020-06-15  65
+## 6  2020-02-25  67</code></pre>
+<p><br></p>
+</div>
+<div id="rd_insert_na" class="section level1" number="8">
+<h1><span class="header-section-number">8</span>
+<strong>rd_insert_na</strong></h1>
+<p>This is an auxiliary function that can be used to set some values of
+a variable(s) to missing if a certain logic is fulfilled. It can be
+used, for example, to insert missing values on those checkboxes that do
+not have a branching logic, as mentioned earlier. For instance, we can
+transform the checkboxes with the <code>rd_checkbox()</code> function
+and then use this function to set the values of the checkbox
+<em>type_underlying_disease_haematological_cancer</em> to missing when
+the age is less than 65 years old:</p>
+<div class="sourceCode" id="cb32"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" tabindex="-1"></a>cb <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb32-2"><a href="#cb32-2" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>()</span>
+<span id="cb32-3"><a href="#cb32-3" tabindex="-1"></a></span>
+<span id="cb32-4"><a href="#cb32-4" tabindex="-1"></a><span class="co">#Before inserting missing values</span></span>
+<span id="cb32-5"><a href="#cb32-5" tabindex="-1"></a><span class="fu">table</span>(cb<span class="sc">$</span>data<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+  0   1 
+103  87 </code></pre>
+<div class="sourceCode" id="cb34"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb34-1"><a href="#cb34-1" tabindex="-1"></a><span class="co">#Run with this function</span></span>
+<span id="cb34-2"><a href="#cb34-2" tabindex="-1"></a>cb2 <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb34-3"><a href="#cb34-3" tabindex="-1"></a>  <span class="fu">rd_checkbox</span>() <span class="sc">|&gt;</span> </span>
+<span id="cb34-4"><a href="#cb34-4" tabindex="-1"></a>  <span class="fu">rd_insert_na</span>(<span class="at">vars =</span> <span class="st">&quot;type_underlying_disease_haematological_cancer&quot;</span>,</span>
+<span id="cb34-5"><a href="#cb34-5" tabindex="-1"></a>               <span class="at">filter =</span> <span class="st">&quot;age &lt; 65&quot;</span>)</span>
+<span id="cb34-6"><a href="#cb34-6" tabindex="-1"></a></span>
+<span id="cb34-7"><a href="#cb34-7" tabindex="-1"></a><span class="co">#After inserting missing values</span></span>
+<span id="cb34-8"><a href="#cb34-8" tabindex="-1"></a><span class="fu">table</span>(cb2<span class="sc">$</span>data<span class="sc">$</span>type_underlying_disease_haematological_cancer)</span></code></pre></div>
+<pre><code>
+ 0  1 
+65 50 </code></pre>
+<p>If the variable has a <code>.factor</code> version, it is also set to
+missing, so that a later <code>rd_factor()</code> doesn’t bring the
+values back.</p>
+<blockquote>
+<p>Note that both the variable to be transformed
+(<code>type_underlying_disease_haematological_cancer</code>) and the
+variable included in the filter (<code>age</code>) are in the same
+event. If the variable to be transformed and the filter didn’t have any
+event in common then the transformation would give an error.
+Furthermore, if the variable to be transformed was in more events than
+the filter, only the rows of the events in common would be
+converted.</p>
+</blockquote>
+<p><br></p>
+</div>
+<div id="rd_rlogic" class="section level1" number="9">
+<h1><span class="header-section-number">9</span>
+<strong>rd_rlogic</strong></h1>
+<p>This is also an auxiliary function that transforms the REDCap logic
+into logic that can be evaluated in R. This function is used internally
+in multiple functions, for example, <code>rd_dictionary()</code>. It
+returns a list with:</p>
+<ul>
+<li><p><code>rlogic</code>: the transformed logic. It can use auxiliary
+columns (e.g. the values of other events of the record) and internal
+functions of the package, so it can’t always be evaluated directly on
+the original dataset: use <code>eval</code> or
+<code>eval_data</code>.</p></li>
+<li><p><code>eval</code>: the result of the evaluation of the logic in
+R, one value per row of the dataset, with <code>NA</code> outside the
+events and rows where the variable is collected. A logic without
+variables (e.g. <code>1 + 1</code>) can give a single value in a dataset
+without events or repetitions.</p></li>
+<li><p><code>eval_data</code>: a data frame with the record identifier,
+the event (and repetition, if any) and <code>eval</code>, to identify
+the record of each evaluated value.</p></li>
+</ul>
+<blockquote>
+<p>This function doesn’t modify the dataset, so it has to be used
+outside the transform workflow.</p>
+</blockquote>
+<p>Let’s see how it transforms the logic of one of the calculated fields
+in the built-in dataset:</p>
+<div class="sourceCode" id="cb36"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb36-1"><a href="#cb36-1" tabindex="-1"></a>logic_trans <span class="ot">&lt;-</span> covican <span class="sc">|&gt;</span> </span>
+<span id="cb36-2"><a href="#cb36-2" tabindex="-1"></a>  <span class="fu">rd_rlogic</span>(<span class="at">logic =</span> <span class="st">&quot;if([exc_1]=&#39;1&#39; or [inc_1]=&#39;0&#39; or [inc_2]=&#39;0&#39; or [inc_3]=&#39;0&#39;,1,0)&quot;</span>,</span>
+<span id="cb36-3"><a href="#cb36-3" tabindex="-1"></a>            <span class="at">var =</span> <span class="st">&quot;screening_fail_crit&quot;</span>)</span>
+<span id="cb36-4"><a href="#cb36-4" tabindex="-1"></a></span>
+<span id="cb36-5"><a href="#cb36-5" tabindex="-1"></a>logic_trans<span class="sc">$</span>rlogic</span></code></pre></div>
+<pre><code>[1] &quot;ifelse(data$exc_1==&#39;1&#39; | data$inc_1==&#39;0&#39; | data$inc_2==&#39;0&#39; | data$inc_3==&#39;0&#39;,1,0)&quot;</code></pre>
+<div class="sourceCode" id="cb38"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb38-1"><a href="#cb38-1" tabindex="-1"></a><span class="fu">head</span>(logic_trans<span class="sc">$</span>eval_data)</span></code></pre></div>
+<pre><code>  record_id        redcap_event_name eval
+1     100-6     baseline_visit_arm_1    0
+2     100-6 follow_up_visit_da_arm_1   NA
+3    100-13     baseline_visit_arm_1    0
+4    100-13 follow_up_visit_da_arm_1   NA
+5    100-16     baseline_visit_arm_1    0
+6    100-16 follow_up_visit_da_arm_1   NA</code></pre>
+<p>The variables of the logic that have already been converted to
+factors with <code>rd_factor()</code> are evaluated with their original
+codes, so the result is the same before and after the conversion.</p>
+<p><br></p>
+</div>
+<div id="rd_transform" class="section level1" number="10">
+<h1><span class="header-section-number">10</span>
+<strong>rd_transform</strong></h1>
+<p>Alternatively, you can do all these steps at once using the
+<code>rd_transform()</code> function, except
+<code>rd_insert_na()</code>: its filters are specific to each project,
+so apply it separately.</p>
+<div class="sourceCode" id="cb40"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb40-1"><a href="#cb40-1" tabindex="-1"></a>covican_transformed <span class="ot">&lt;-</span> <span class="fu">rd_transform</span>(covican)</span>
+<span id="cb40-2"><a href="#cb40-2" tabindex="-1"></a></span>
+<span id="cb40-3"><a href="#cb40-3" tabindex="-1"></a><span class="co">#Print the results of the transformation</span></span>
+<span id="cb40-4"><a href="#cb40-4" tabindex="-1"></a>covican_transformed<span class="sc">$</span>results</span></code></pre></div>
+<pre><code>1. Removing selected variables
+
+2. Deleting variables that contain some patterns
+
+3. Recalculating calculated fields and saving them as &#39;[field_name]_recalc&#39;
+
+
+| Total calculated fields | Non-transcribed fields | Fields with different recalculated values |
+|:-----------------------:|:----------------------:|:-----------------------------------------:|
+|            2            |         0 (0%)         |                  1 (50%)                  |
+
+
+|     field_name      | Transcribed? | Is equal? | Different values |
+|:-------------------:|:------------:|:---------:|:----------------:|
+|         age         |     Yes      |   FALSE   |        1         |
+| screening_fail_crit |     Yes      |   TRUE    |        0         |
+
+4. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options.
+
+Table: Checkbox variables advisable to be reviewed
+
+| Variables without any branching logic |
+|:-------------------------------------:|
+|        type_underlying_disease        |
+
+5. Replacing original variables for their factor version
+
+6. Converting every branching logic in the dictionary into R logic</code></pre>
+<p>Using the arguments of the function we can perform all the different
+type of transformations described until now.</p>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

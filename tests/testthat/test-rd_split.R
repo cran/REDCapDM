@@ -1,7 +1,7 @@
 # ---- 1) Checkbox-specific missing-variable error ----
 test_that("rd_split errors with missing dictionary vars that are checkbox type", {
-  data <- tibble(record_id = 1)
-  dic  <- tibble(
+  data <- tibble::tibble(record_id = 1)
+  dic  <- tibble::tibble(
     field_name = c("record_id", "cb_1"),
     field_type = c("text", "checkbox"),
     form_name  = c("form1", "form1")
@@ -14,13 +14,13 @@ test_that("rd_split errors with missing dictionary vars that are checkbox type",
 
 # ---- 2) _complete / _timestamp extra-variable message ----
 test_that("rd_split errors with default REDCap _complete/_timestamp variables present in data but not dictionary", {
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = 1,
     someform_complete = 1,
     someform_timestamp = Sys.time()
   )
 
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = "record_id",
     field_type = "text",
     form_name  = "meta"
@@ -35,23 +35,25 @@ test_that("rd_split errors with default REDCap _complete/_timestamp variables pr
 
 # ---- 3) Factor-version variables in data not in dictionary -> rd_factor message ----
 test_that("rd_split errors when .factor versions of variables are present but not in dictionary", {
-  data <- tibble(record_id = 1, var1.factor = "A")
-  dic  <- tibble(field_name = "record_id", field_type = "text", form_name = "meta")
+  data <- tibble::tibble(record_id = 1, var1.factor = "A")
+  dic  <- tibble::tibble(field_name = "record_id", field_type = "text", form_name = "meta")
 
-  expect_no_error(
-    rd_split(data = data, dic = dic)
+  # `var1` isn't a field of the dictionary: its factor version is an extra variable (it was left out without notice)
+  expect_error(
+    rd_split(data = data, dic = dic),
+    "var1.factor", fixed = TRUE
   )
 })
 
 # ---- 4) Non-longitudinal split by form (self-contained) ----
 test_that("rd_split splits non-longitudinal data by form (self-contained example)", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "a1", "a2", "b1"),
     field_type = c("text", "text", "text", "text"),
     form_name  = c("meta", "form_a", "form_a", "form_b")
   )
 
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = 1:3,
     a1 = c("x","y","z"),
     a2 = c(10, 20, 30),
@@ -73,19 +75,19 @@ test_that("rd_split splits non-longitudinal data by form (self-contained example
   })
 
   # ensure that form_a DF contains a1 and a2
-  fa_row <- res$data |> filter(form == "form_a") |> pull(df) |> pluck(1)
+  fa_row <- res$data |> dplyr::filter(form == "form_a") |> dplyr::pull(df) |> purrr::pluck(1)
   expect_true(all(c("a1", "a2", "record_id") %in% names(fa_row)))
 })
 
 # ---- 5) Longitudinal form-splitting requires event_form ----
 test_that("rd_split errors when splitting by form in longitudinal project without event_form", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "x1"),
     field_type = c("text", "text"),
     form_name  = c("meta", "formX")
   )
 
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = 1:2,
     redcap_event_name = c("event_1", "event_2"),
     x1 = c("a","b")
@@ -100,19 +102,19 @@ test_that("rd_split errors when splitting by form in longitudinal project withou
 
 # ---- 6) Splitting by event (self-contained) ----
 test_that("rd_split splits longitudinal data by event when event_form is provided", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "a1", "b1"),
     field_type = c("text", "text", "text"),
     branching_logic_show_field_only_if = c("", "", ""),
     form_name  = c("meta", "form_a", "form_b")
   )
 
-  event_form <- tibble(
+  event_form <- tibble::tibble(
     form = c("form_a", "form_b"),
     unique_event_name = c("ev1", "ev2")
   )
 
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = c(1,2,3,4),
     redcap_event_name = c("ev1", "ev1", "ev2", "ev2"),
     a1 = c("x", NA, NA, NA),
@@ -124,14 +126,14 @@ test_that("rd_split splits longitudinal data by event when event_form is provide
   expect_true(all(c("ev1", "ev2") %in% res$data$events))
 
   # each event df should contain record_id
-  ev1_df <- res$data |> filter(events == "ev1") |> pull(df) |> pluck(1)
+  ev1_df <- res$data |> dplyr::filter(events == "ev1") |> dplyr::pull(df) |> purrr::pluck(1)
   expect_true("record_id" %in% names(ev1_df))
 })
 
 # ---- 7) invalid `by` argument is rejected ----
 test_that("rd_split rejects invalid `by` argument", {
-  dic <- tibble(field_name = "record_id", field_type = "text", form_name = "meta")
-  data <- tibble(record_id = 1)
+  dic <- tibble::tibble(field_name = "record_id", field_type = "text", form_name = "meta")
+  data <- tibble::tibble(record_id = 1)
 
   expect_error(
     rd_split(data = data, dic = dic, by = "nonsense"),
@@ -143,8 +145,8 @@ test_that("rd_split rejects invalid `by` argument", {
 # ---- 8) project argument overrides data/dic ----
 test_that("rd_split respects project argument over data/dic", {
   fake_proj <- list(
-    data = tibble(record_id = 1),
-    dic  = tibble(field_name = "record_id", field_type = "text", form_name = "meta"),
+    data = tibble::tibble(record_id = 1),
+    dic  = tibble::tibble(field_name = "record_id", field_type = "text", form_name = "meta"),
     event_form = NULL
   )
 
@@ -163,12 +165,12 @@ test_that("rd_split respects project argument over data/dic", {
 
 # ---- 9) which argument selects a single form ----
 test_that("rd_split returns only selected form when which is supplied", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "a1", "b1"),
     field_type = c("text", "text", "text"),
     form_name  = c("meta", "form_a", "form_b")
   )
-  data <- tibble(record_id = 1:2, a1 = 1:2, b1 = 3:4)
+  data <- tibble::tibble(record_id = 1:2, a1 = 1:2, b1 = 3:4)
 
   res <- rd_split(data = data, dic = dic, by = "form", which = "form_a")
   expect_true(all(c("record_id", "a1") %in% names(res$data)))
@@ -177,12 +179,12 @@ test_that("rd_split returns only selected form when which is supplied", {
 
 # ---- 10) which argument with multiple values warns ----
 test_that("rd_split warns if multiple which values are supplied", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "a1"),
     field_type = c("text", "text"),
     form_name  = c("meta", "form_a")
   )
-  data <- tibble(record_id = 1:2, a1 = c("x", "y"))
+  data <- tibble::tibble(record_id = 1:2, a1 = c("x", "y"))
 
   expect_warning(
     res <- rd_split(data = data, dic = dic, by = "form", which = c("form_a", "form_b")),
@@ -192,32 +194,32 @@ test_that("rd_split warns if multiple which values are supplied", {
 
 # ---- 11) wide = TRUE expands into wide format ----
 test_that("rd_split expands to wide format when wide = TRUE", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "abc", "abc_aba"),
     field_type = c("text", "text", "text"),
     form_name  = c("meta", "meta", "form_a")
   )
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = c(1,1,1,2),
     abc = c("x","x","y","z"),
     abc_aba = c("x", "x","y","z")
   )
 
   res <- rd_split(data = data, dic = dic, by = "form", wide = TRUE)
-  df_form_a <- res$data |> pull(max_repeated_instance)
+  df_form_a <- res$data |> dplyr::pull(max_repeated_instance)
 
   expect_true(length(df_form_a) > 1)
 })
 
 # ---- 12) repeated instruments branch ----
 test_that("rd_split handles repeated instruments correctly", {
-  dic <- tibble(
+  dic <- tibble::tibble(
     field_name = c("record_id", "var0", "var1"),
     field_type = c("text", "text", "text"),
     form_name  = c("formX", "formX", "formX")
   )
 
-  data <- tibble(
+  data <- tibble::tibble(
     record_id = c(1,1,2),
     # redcap_event_name = c("visit1", "visit1", "visit1"),
     # redcap_event_name.factor = c("Visit1", "Visit1", "Visit1"),
@@ -231,7 +233,7 @@ test_that("rd_split handles repeated instruments correctly", {
   )
 
   res <- rd_split(data = data, dic = dic, by = "form")
-  df_formX <- res$data |> filter(form == "formX") |> pull(df) |> pluck(1)
+  df_formX <- res$data |> dplyr::filter(form == "formX") |> dplyr::pull(df) |> purrr::pluck(1)
 
   expect_true("var1" %in% names(df_formX))
   expect_false("redcap_repeat_instrument.factor" %in% names(df_formX))
@@ -239,8 +241,293 @@ test_that("rd_split handles repeated instruments correctly", {
 
 # ---- 13) errors if data or dic missing ----
 test_that("rd_split errors if data or dic are missing", {
-  dic <- tibble(field_name = "record_id", field_type = "text", form_name = "meta")
+  dic <- tibble::tibble(field_name = "record_id", field_type = "text", form_name = "meta")
   expect_error(rd_split(data = NULL, dic = dic), regexp = "must be provided")
-  expect_error(rd_split(data = tibble(record_id = 1), dic = NULL), regexp = "must be provided")
+  expect_error(rd_split(data = tibble::tibble(record_id = 1), dic = NULL), regexp = "must be provided")
 })
 
+
+test_that("rd_split ignores the descriptive fields of the dictionary", {
+  dic <- rbind(covican$dictionary, covican$dictionary[nrow(covican$dictionary), ])
+  dic$field_name[nrow(dic)] <- "info_text"
+  dic$field_type[nrow(dic)] <- "descriptive"
+
+  res <- rd_split(data = covican$data, dic = dic, event_form = covican$event_form, by = "form")
+  ref <- rd_split(covican, by = "form")
+
+  expect_equal(res$data, ref$data)
+})
+
+
+test_that("rd_split keeps the `_mdc` columns of redcap_data(rm_mdc = FALSE) with their variable", {
+  mdc <- covican
+  mdc$data <- dplyr::mutate(covican$data, potassium_mdc = ifelse(is.na(potassium), "UNK", NA), .after = "potassium")
+
+  res <- rd_split(mdc, by = "form", which = "laboratory_findings")
+  expect_true("potassium_mdc" %in% names(res$data))
+
+  res <- rd_split(mdc, by = "event")
+  expect_true("potassium_mdc" %in% names(res$data$df[[1]]))
+})
+
+
+test_that("rd_split wide gives one row per record with repeated instruments", {
+  fx <- make_repeat_classic()
+  res <- rd_split(data = fx$data, dic = fx$dictionary, by = "form", wide = TRUE)
+
+  ae <- res$data$df[[which(res$data$form == "ae")]]
+  expect_equal(nrow(ae), 2)
+  expect_true(all(c("ae_term_1", "ae_term_2", "ae_grade_1", "ae_grade_2") %in% names(ae)))
+  expect_equal(res$data$max_repeated_instance[res$data$form == "ae"], 2)
+})
+
+
+test_that("rd_split explains why it can't split by event", {
+  fx <- make_repeat_classic()
+  expect_error(rd_split(fx, by = "event"), "The data has no events")
+  expect_error(rd_split(fx, by = "events"), "Invalid `by` argument")
+
+  lx <- make_cross_event()
+  expect_error(rd_split(data = lx$data, dic = lx$dictionary, by = "event"), "`event_form`")
+})
+
+test_that("rd_split works with a project without records", {
+  fx <- make_repeat_classic()
+  fx$data <- fx$data[0, ]
+
+  res <- expect_silent(rd_split(fx, by = "form", wide = TRUE))
+  expect_true(all(res$data$max_repeated_instance == 0))
+})
+
+test_that("rd_split names the fields of the dictionary that are not in the data and the instruments to remove", {
+  data <- tibble::tibble(record_id = 1:2, a = c(1, 2))
+  dic <- tibble::tibble(
+    field_name = c("record_id", "a", "b", "c"),
+    field_type = "text",
+    form_name = c("form1", "form1", "form2", "form2")
+  )
+
+  err <- expect_error(rd_split(data = data, dic = dic), class = "REDCapDM_error_data")
+  expect_match(conditionMessage(err), "`b` and `c`")
+  expect_match(conditionMessage(err), "rd_delete_vars(project, forms = \"form2\")", fixed = TRUE)
+
+  # Once the instrument is removed, the data is split
+  out <- rd_split(rd_delete_vars(data = data, dic = dic, forms = "form2"), by = "form")
+  expect_equal(out$data$form, "form1")
+})
+
+test_that("rd_split keeps a record identifier with another name in every dataset", {
+  dic <- data.frame(
+    field_name = c("subject", "age", "weight"), form_name = c("demo", "demo", "visit"), field_type = "text",
+    field_label = c("Subject", "Age", "Weight"), choices_calculations_or_slider_labels = "",
+    text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(subject = c("S1", "S2"), age = c(30, 40), weight = c(70, 80))
+  for (wide in c(FALSE, TRUE)) {
+    out <- suppressMessages(rd_split(data = data, dic = dic, by = "form", wide = wide))
+    expect_true(all(vapply(out$data$df, function(df) "subject" %in% names(df), logical(1))))
+  }
+
+  # Longitudinal, by form and by event
+  data <- data.frame(study_id = rep(c("S1", "S2"), each = 2), redcap_event_name = rep(c("v1_arm_1", "v2_arm_1"), 2), age = c(30, NA, 40, NA), weight = c(NA, 70, NA, 80))
+  dic$field_name[1] <- "study_id"
+  event_form <- data.frame(arm_num = 1, unique_event_name = c("v1_arm_1", "v1_arm_1", "v2_arm_1"), form = c("demo", "visit", "visit"))
+  for (by in c("form", "event")) {
+    out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = by))
+    expect_true(all(vapply(out$data$df, function(df) "study_id" %in% names(df), logical(1))), info = by)
+  }
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form", wide = TRUE))
+  # (the columns of each event keep the name of the variable, also in a form with only one variable)
+  expect_equal(names(out$data$df[[which(out$data$form == "visit")]]), c("study_id", "weight_1", "weight_2"))
+})
+
+test_that("rd_split(wide = TRUE) keeps the fields called `id`", {
+  dic <- data.frame(
+    field_name = c("id", "weight"), form_name = "visit", field_type = "text", field_label = c("ID", "Weight"),
+    choices_calculations_or_slider_labels = "", text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(id = rep(c("S1", "S2"), each = 2), redcap_event_name = rep(c("v1_arm_1", "v2_arm_1"), 2), weight = c(70, 71, 80, 81))
+  event_form <- data.frame(arm_num = 1, unique_event_name = c("v1_arm_1", "v2_arm_1"), form = "visit")
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form", wide = TRUE))$data$df[[1]]
+  expect_equal(out$id, c("S1", "S2"))
+  expect_equal(out$weight_2, c(71, 81))
+
+  # A field `id` that isn't the record identifier
+  data <- data.frame(record_id = rep(c("S1", "S2"), each = 2), redcap_event_name = rep(c("v1_arm_1", "v2_arm_1"), 2), id = c("a", "b", "c", "d"), weight = c(70, 71, 80, 81))
+  dic <- rbind(transform(dic[1, ], field_name = "record_id"), dic)
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form", wide = TRUE))$data$df[[1]]
+  expect_equal(names(out), c("record_id", "id_1", "id_2", "weight_1", "weight_2"))
+  expect_equal(out$id_2, c("b", "d"))
+})
+
+test_that("rd_split works with repeating instruments without the factor version of redcap_repeat_instrument", {
+  dic <- data.frame(
+    field_name = c("record_id", "age", "drug"), form_name = c("demo", "demo", "med"), field_type = "text", field_label = c("ID", "Age", "Drug"),
+    choices_calculations_or_slider_labels = "", text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(record_id = c("1", "1", "1", "2"), redcap_repeat_instrument = c(NA, "med", "med", NA), redcap_repeat_instance = c(NA, 1, 2, NA), age = c(30, NA, NA, 40), drug = c(NA, "a", "b", NA))
+  with_factor <- data
+  with_factor$redcap_repeat_instrument.factor <- data$redcap_repeat_instrument
+  for (wide in c(FALSE, TRUE)) {
+    out <- suppressMessages(rd_split(data = data, dic = dic, by = "form", wide = wide))
+    expected <- suppressMessages(rd_split(data = with_factor, dic = dic, by = "form", wide = wide))
+    expect_equal(out$data$df, expected$data$df, info = wide)
+  }
+  out <- suppressMessages(rd_split(data = data, dic = dic, by = "form"))$data
+  expect_equal(out$df[[which(out$form == "med")]]$drug, c("a", "b"))
+})
+
+test_that("rd_split keeps the normal rows with an empty instrument and of forms that repeat only in some events", {
+  dic <- data.frame(
+    field_name = c("record_id", "age", "drug"), form_name = c("demo", "demo", "med"), field_type = "text", field_label = c("ID", "Age", "Drug"),
+    choices_calculations_or_slider_labels = "", text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(record_id = c("1", "1", "1", "2"), redcap_repeat_instrument = c("", "med", "med", ""), redcap_repeat_instance = c(NA, 1, 2, NA), age = c(30, NA, NA, 40), drug = c(NA, "a", "b", NA))
+  for (wide in c(FALSE, TRUE)) {
+    out <- suppressMessages(rd_split(data = data, dic = dic, by = "form", wide = wide))$data
+    expect_equal(nrow(out$df[[which(out$form == "demo")]]), 2, info = wide)
+  }
+
+  # A form that repeats in one event and not in the other
+  dic <- dic[1:2, ]
+  dic$field_name[2] <- "hb"
+  dic$form_name <- "labs"
+  data <- data.frame(record_id = "1", redcap_event_name = c("base_arm_1", "treat_arm_1", "treat_arm_1"), redcap_repeat_instrument = c(NA, "labs", "labs"), redcap_repeat_instance = c(NA, 1, 2), hb = c(12, 11, NA))
+  event_form <- data.frame(arm_num = 1, unique_event_name = c("base_arm_1", "treat_arm_1"), form = "labs")
+  for (factor_version in c(FALSE, TRUE)) {
+    if (factor_version) data$redcap_repeat_instrument.factor <- factor(ifelse(is.na(data$redcap_repeat_instrument), NA, "Labs"))
+    out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form"))$data$df[[1]]
+    expect_equal(out$hb, c(12, 11, NA), info = factor_version)
+    wide <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form", wide = TRUE))$data$df[[1]]
+    expect_equal(unname(unlist(wide[c("hb_1", "hb_2", "hb_3")])), c(12, 11, NA), info = factor_version)
+  }
+
+  # The variables keep their labels
+  data$hb <- labelled::set_variable_labels(data["hb"], hb = "Hemoglobin")$hb
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = event_form, by = "form"))$data$df[[1]]
+  expect_equal(attr(out$hb, "label"), "Hemoglobin")
+})
+
+
+test_that("rd_split only takes as factor versions and checkbox options the columns of fields of the dictionary", {
+  dic <- data.frame(field_name = c("record_id", "a", "cb"), form_name = "f", field_type = c("text", "text", "checkbox"),
+                    field_label = c("ID", "A", "CB"), choices_calculations_or_slider_labels = c("", "", "1, X"),
+                    branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+
+  for (extra in c("riskfactor", "risk_factor", "ghost___1", "ghost___1.factor")) {
+    data <- data.frame(record_id = 1:2, a = 3:4, cb___1 = c(0, 1), x = 5:6)
+    names(data)[4] <- extra
+    expect_error(rd_split(data = data, dic = dic, by = "form"), extra, fixed = TRUE)
+  }
+
+  # The factor versions of the fields and of the checkbox options are still accepted
+  data <- data.frame(record_id = 1:2, a = 3:4, a.factor = c("x", "y"), cb___1 = c(0, 1), cb___1.factor = c("Unchecked", "Checked"))
+  res <- rd_split(data = data, dic = dic, by = "form")
+  expect_setequal(names(res$data$df[[1]]), names(data))
+
+  # and so is the factor version of the status of a form (the status itself has to be removed first, as before), also
+  # of a form that redcap_data() removed from the dictionary because it is in no event
+  data$f_complete.factor <- c("Complete", "Incomplete")
+  data$unused_complete.factor <- c("Incomplete", "Incomplete")
+  expect_no_error(rd_split(data = data, dic = dic, by = "form"))
+  data$f_complete <- c(2, 0)
+  expect_error(rd_split(data = data, dic = dic, by = "form"), "rd_delete_vars", fixed = TRUE)
+})
+
+test_that("rd_split only takes as checkbox options the columns of checkbox fields", {
+  dic <- data.frame(field_name = c("record_id", "age"), form_name = "f", field_type = "text", field_label = c("ID", "Age"),
+                    stringsAsFactors = FALSE)
+  data <- data.frame(record_id = 1:2, age = c(30, 40), age___1 = c(0, 1))
+  expect_error(rd_split(data = data, dic = dic, by = "form"), "age___1", fixed = TRUE)
+
+  data$age___1 <- NULL
+  data$age___1.factor <- c("Unchecked", "Checked")
+  expect_error(rd_split(data = data, dic = dic, by = "form"), "age___1.factor", fixed = TRUE)
+})
+
+test_that("rd_split takes the factor versions of the options kept by rd_checkbox(checkbox_names = FALSE)", {
+  dic <- data.frame(
+    field_name = c("record_id", "cb"), form_name = "f", field_type = c("text", "checkbox"), field_label = c("ID", "CB"),
+    choices_calculations_or_slider_labels = c("", "1, One | 2, Two"), branching_logic_show_field_only_if = "",
+    text_validation_type_or_show_slider_number = "", stringsAsFactors = FALSE
+  )
+  data <- data.frame(record_id = 1:3, cb___1 = c(1, 0, NA), cb___2 = c(0, 1, 0))
+  data$cb___1.factor <- factor(c("Checked", "Unchecked", NA), levels = c("Unchecked", "Checked"))
+  data$cb___2.factor <- factor(c("Unchecked", "Checked", "Unchecked"), levels = c("Unchecked", "Checked"))
+
+  kept <- rd_checkbox(data = data, dic = dic, checkbox_names = FALSE, na_logic = "none")
+  res <- rd_split(kept, by = "form")
+  expect_setequal(names(res$data$df[[1]]), c("record_id", "cb___1", "cb___2", "cb___1.factor", "cb___2.factor"))
+
+  res <- rd_split(rd_dictionary(kept), by = "form")
+  expect_true("cb___1.factor" %in% names(res$data$df[[1]]))
+})
+
+
+# ---- Forms of repeating instruments chosen by their code, not by their label ----
+
+split_label_data <- function() {
+  data <- data.frame(
+    record_id = c("1", "1", "1", "1", "1", "2"),
+    redcap_repeat_instrument = c(NA, "labs", "labs", "meds", "meds", NA),
+    redcap_repeat_instance = c(NA, 1, 2, 1, 2, NA),
+    b = c(5, NA, NA, NA, NA, 6), redcap_repeat_instrument_note = c("n1", NA, NA, NA, NA, "n2"),
+    l = c(NA, 1, 2, NA, NA, NA), m = c(NA, NA, NA, 3, 4, NA)
+  )
+  data$redcap_repeat_instrument.factor <- factor(c(NA, "Repeated", "Repeated", "Repeated", "Repeated", NA))
+  data
+}
+split_label_dic <- function() {
+  data.frame(field_name = c("record_id", "b", "redcap_repeat_instrument_note", "l", "m"), form_name = c("base", "base", "base", "labs", "meds"),
+             field_type = "text", field_label = c("ID", "B", "Note", "L", "M"))
+}
+
+test_that("rd_split chooses the rows of each repeating instrument by its code: two instruments can have the same label", {
+  out <- suppressWarnings(suppressMessages(rd_split(data = split_label_data(), dic = split_label_dic(), by = "form")))$data
+  expect_equal(out$form, c("base", "labs", "meds"))
+  expect_equal(out$df[[2]]$l, c(1, 2))
+  expect_equal(out$df[[3]]$m, c(3, 4))
+  # (the label is shown)
+  expect_equal(as.character(out$df[[2]]$redcap_repeat_instrument), c("Repeated", "Repeated"))
+  # A field whose name starts as a column of REDCap is kept
+  expect_equal(out$df[[1]]$redcap_repeat_instrument_note, c("n1", "n2"))
+
+  # An instrument with different labels in different records is a single form
+  data <- split_label_data()
+  data$redcap_repeat_instrument.factor <- factor(c(NA, "Labs", "Labs (v2)", "Meds", "Meds", NA))
+  out <- suppressWarnings(suppressMessages(rd_split(data = data, dic = split_label_dic(), by = "form")))$data
+  expect_equal(out$form, c("base", "labs", "meds"))
+  expect_equal(nrow(out$df[[2]]), 2)
+})
+
+test_that("rd_split(wide = TRUE) gives one row per record for a form with only the record identifier", {
+  dic <- data.frame(field_name = c("record_id", "x"), form_name = c("demo", "visit"), field_type = "text", field_label = c("ID", "X"),
+                    choices_calculations_or_slider_labels = "", branching_logic_show_field_only_if = "", text_validation_type_or_show_slider_number = "")
+  ef <- data.frame(arm_num = 1, unique_event_name = c("a_arm_1", "b_arm_1", "a_arm_1", "b_arm_1"), form = c("demo", "demo", "visit", "visit"))
+  data <- data.frame(record_id = c("1", "1", "2", "2"), redcap_event_name = c("a_arm_1", "b_arm_1", "a_arm_1", "b_arm_1"), x = 1:4)
+
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = ef, wide = TRUE))$data
+  expect_equal(names(out$df[[1]]), "record_id")
+  expect_equal(out$df[[1]]$record_id, c("1", "2"))
+  expect_equal(out$df[[2]]$x_2, c(2L, 4L))
+  expect_equal(suppressMessages(rd_split(data = data, dic = dic, event_form = ef, wide = TRUE, which = "demo"))$data$record_id, c("1", "2"))
+})
+
+test_that("rd_split takes an instrument written with spaces as the base row and shows the code of an instrument without label", {
+  dic <- data.frame(field_name = c("record_id", "age", "hb"), form_name = c("demo", "demo", "lab"), field_type = "text", field_label = c("ID", "Age", "Hb"),
+                    choices_calculations_or_slider_labels = "", branching_logic_show_field_only_if = "", text_validation_type_or_show_slider_number = "")
+  ef <- data.frame(arm_num = 1, unique_event_name = c("a_arm_1", "a_arm_1", "b_arm_1"), form = c("demo", "lab", "lab"))
+  data <- data.frame(record_id = "1", redcap_event_name = c("a_arm_1", "b_arm_1", "b_arm_1"), redcap_repeat_instrument = c(" ", "lab", "lab"),
+                     redcap_repeat_instance = c(NA, 1, 2), age = c(50, NA, NA), hb = c(12, 11, NA))
+
+  out <- suppressMessages(rd_split(data = data, dic = dic, event_form = ef))$data
+  expect_equal(out$df[[1]]$age, 50)
+  expect_equal(out$df[[2]]$hb, c(12, 11, NA))
+
+  # Labels missing or empty: the code of the instrument
+  for (label in list(factor(c(NA, NA, "Labs")), c(NA, "", "Labs"))) {
+    data$redcap_repeat_instrument.factor <- label
+    lab <- suppressMessages(rd_split(data = data, dic = dic, event_form = ef, which = "lab"))$data
+    expect_equal(as.character(lab$redcap_repeat_instrument), c(NA, "lab", "Labs"))
+  }
+})

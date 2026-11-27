@@ -25,21 +25,25 @@ rd_checkbox(
 
 \item{checkbox_labels}{Character vector of length 2 for labels of unchecked/checked values. Default: \code{c("No", "Yes")}.}
 
-\item{checkbox_names}{Logical. If \code{TRUE} (default), checkbox columns are renamed using choice labels.}
+\item{checkbox_names}{Logical. If \code{TRUE} (default), checkbox columns are renamed using choice labels. With \code{FALSE}, the columns keep their names and each option is a field of the dictionary: running the function again on its result stops with an error instead of converting them again.
+Without the \code{.factor} versions of the options, the values of the columns become the labels; with them (as in the
+data of \code{redcap_data()}), the columns keep their codes 0/1 and their \code{.factor} versions take the labels.}
 
-\item{na_logic}{Controls how missing values are set based on branching logic. Must be one of \code{"none"} (do nothing), \code{"missing"} (set to \code{NA} only when the logic evaluation is \code{NA}), or \code{"eval"} (set to \code{NA} when the logic evaluates to \code{FALSE}). Defaults to \code{"missing"}.}
+\item{na_logic}{Controls how missing values are set based on branching logic. Must be one of \code{"none"} (do nothing), \code{"missing"} (set to \code{NA} only when the logic evaluation is \code{NA}), or \code{"eval"} (set to \code{NA} when the logic evaluates to \code{FALSE} or \code{NA}). Defaults to \code{"missing"}.}
 }
 \value{
 A list with:
 \describe{
-\item{data}{Transformed dataset with checkbox fields as factors and optionally renamed.}
+\item{data}{Transformed dataset with the checkbox options optionally renamed. When the data has the \code{.factor}
+versions of the options, the original columns keep their codes 0/1 and the \code{.factor} versions take the labels of
+\code{checkbox_labels}; otherwise the original columns are replaced by factors with these labels.}
 \item{dictionary}{Updated dictionary with checkbox fields expanded and optionally renamed.}
 \item{event_form}{The \code{event_form} passed in (if applicable).}
 \item{results}{Summary of transformations and any fields needing review.}
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 This function is used to process checkbox variables in a REDCap dataset. By default, it changes their default categories ("Unchecked" and "Checked") to new ones ("No" and "Yes). Optionally, the function can also evaluate the branching logic for checkbox fields and adjust the data and dictionary accordingly.
 }
@@ -49,6 +53,7 @@ This function is used to process checkbox variables in a REDCap dataset. By defa
 \item Branching logic evaluation requires \code{event_form} for longitudinal projects.
 \item Names are cleaned and truncated to 60 characters; uniqueness is enforced.
 \item Fields that cannot be evaluated are listed in \code{results}.
+\item In the branching logic and calculations, the options get their new names and keep their codes \code{0} and \code{1}, as in REDCap logic (e.g. \verb{[cb(1)] = '1'} is \verb{[cb_option] = '1'}, and \verb{[cb(1)] + [cb(2)] >= 2} is \verb{[cb_option] + [cb_other] >= 2}). \code{rd_dictionary()} writes the labels when it translates the logic into R.
 }
 }
 \examples{
@@ -58,6 +63,7 @@ res <- rd_checkbox(covican)
 # With custom labels
 res <- rd_checkbox(data = covican$data,
                    dic = covican$dictionary,
+                   event_form = covican$event_form,
                    checkbox_labels = c("Not present", "Present"))
 
 # Keep original checkbox names
@@ -66,7 +72,20 @@ res <- rd_checkbox(covican, checkbox_names = FALSE)
 # Longitudinal project with NA logic
 res <- rd_checkbox(data = covican$data,
                    dic = covican$dictionary,
-                   event_form = covican$event_form,,
+                   event_form = covican$event_form,
                    na_logic = "eval")
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

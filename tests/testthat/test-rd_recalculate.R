@@ -4,19 +4,19 @@ cov_event_form <- covican$event_form
 
 # Select a real calculated field from the dictionary if available
 calc_fields <- cov_dic |>
-  filter(field_type == "calc") |>
-  pull(field_name)
+  dplyr::filter(field_type == "calc") |>
+  dplyr::pull(field_name)
 
 # If none exist, for testing, pick numeric fields as "calc" and create simple logic
 if(length(calc_fields) == 0){
   cov_dic_test <- cov_dic |>
-    filter(field_name %in% c("age", "potassium")) |>
-    mutate(
+    dplyr::filter(field_name %in% c("age", "potassium")) |>
+    dplyr::mutate(
       field_type = "calc",
       choices_calculations_or_slider_labels = c("age", "potassium")
     )
 } else {
-  cov_dic_test <- cov_dic |> filter(field_name %in% calc_fields[1:2])
+  cov_dic_test <- cov_dic |> dplyr::filter(field_name %in% calc_fields[1:2])
 }
 
 test_that("recalculate returns updated data and dictionary", {
@@ -25,9 +25,10 @@ test_that("recalculate returns updated data and dictionary", {
   expect_type(res, "list")
   expect_named(res, c("data", "dictionary", "event_form", "results"))
 
-  # Recalculated fields should exist if transcription works
-  expect_true(any(grepl("_recalc$", names(res$data)) | sapply(res$data, function(x) !is.null(x))))
-  expect_true(any(grepl("_recalc$", res$dictionary$field_name)))
+  # The recalculated fields are in the dictionary and in the data
+  recalc <- grep("_recalc$", res$dictionary$field_name, value = TRUE)
+  expect_gt(length(recalc), 0)
+  expect_true(all(recalc %in% names(res$data)))
 
   # Results should contain a summary table
   expect_true("glue" %in% class(res$results))
@@ -46,16 +47,19 @@ test_that("recalculate fails if data or dictionary is missing", {
 })
 
 test_that("recalculate works with project list input", {
-  project <- list(data = cov_data, dic = cov_dic_test, event_form = cov_event_form)
+  # (the list of redcap_data(): `dictionary`)
+  project <- list(data = cov_data, dictionary = cov_dic_test, event_form = cov_event_form)
 
-  # Pass project fields individually
-  res <- rd_recalculate(data = project$data, dic = project$dic, event_form = project$event_form)
+  res <- rd_recalculate(project)
+  separate <- rd_recalculate(data = cov_data, dic = cov_dic_test, event_form = cov_event_form)
 
-  expect_true(any(grepl("_recalc$", names(res$data)) | sapply(res$data, function(x) !is.null(x))))
+  expect_gt(length(grep("_recalc$", names(res$data))), 0)
+  expect_equal(res$data, separate$data)
+  expect_equal(res$dictionary, separate$dictionary)
 })
 
 test_that("recalculate warns for character datetime fields", {
-  dic_date <- tibble(
+  dic_date <- tibble::tibble(
     field_name = "d_admission",
     field_type = "text",
     choices_calculations_or_slider_labels = "",
@@ -64,7 +68,7 @@ test_that("recalculate warns for character datetime fields", {
   )
 
   # Force date column to character
-  data_date <- cov_data |> mutate(d_admission = as.character(d_admission)) |> select(d_admission)
+  data_date <- cov_data |> dplyr::mutate(d_admission = as.character(d_admission)) |> dplyr::select(d_admission)
 
   expect_warning(
     rd_recalculate(data = data_date, dic = dic_date),
@@ -73,11 +77,305 @@ test_that("recalculate warns for character datetime fields", {
 })
 
 test_that("recalculate stops for longitudinal project without event_form", {
-  data_long <- cov_data |> filter(!is.na(redcap_event_name))
+  data_long <- cov_data |> dplyr::filter(!is.na(redcap_event_name))
 
   expect_error(
     rd_recalculate(data = data_long, dic = cov_dic_test),
-    "Recalculation cannot proceed because the project has more than one event"
+    "Recalculation cannot proceed because the project is longitudinal"
   )
 })
 
+
+# ---- Number of different values ----
+
+test_that("rd_recalculate reports the number of values that differ from the recalculation", {
+  res <- rd_recalculate(covican)
+  report <- paste(res$results, collapse = "\n")
+
+  expect_match(report, "Different values", fixed = TRUE)
+  # age differs only in record 102-73 (74 in the data, 75 recalculated)
+  expect_match(report, "\\|\\s+age\\s+\\|\\s+Yes\\s+\\|\\s+FALSE\\s+\\|\\s+1\\s+\\|")
+  expect_match(report, "\\|\\s+screening_fail_crit\\s+\\|\\s+Yes\\s+\\|\\s+TRUE\\s+\\|\\s+0\\s+\\|")
+})
+
+test_that("count_differences compares like the 'Is equal?' column", {
+  # numbers rounded to 3 decimals
+  expect_equal(count_differences(c(1, 2.0001, 3), c(1, 2, 4)), 1L)
+  # a value missing in only one version counts as different, missing in both doesn't
+  expect_equal(count_differences(c(1, NA, NA), c(NA, 2, NA)), 2L)
+  # non-numeric values are compared as text
+  expect_equal(count_differences(c("a", "b"), c("a", "c")), 1L)
+  expect_equal(count_differences(as.Date(c("2024-01-01", NA)), as.Date(c("2024-01-01", NA))), 0L)
+  # a one-column data frame is handled as its column
+  expect_equal(count_differences(data.frame(x = c(1, 2)), c(1, 3)), 1L)
+  # not transcribed
+  expect_identical(count_differences(c(1, 2), NULL), NA_integer_)
+})
+
+
+# ---- After rd_factor() and applied twice ----
+
+test_that("rd_recalculate gives the same results after rd_factor()", {
+  before <- rd_recalculate(covican)
+  after <- suppressWarnings(rd_recalculate(suppressWarnings(rd_factor(covican))))
+
+  report <- paste(after$results, collapse = "\n")
+  expect_match(report, "\\|\\s+screening_fail_crit\\s+\\|\\s+Yes\\s+\\|\\s+TRUE\\s+\\|\\s+0\\s+\\|")
+  expect_false("screening_fail_crit_recalc" %in% names(after$data))
+  expect_equal(after$data$age_recalc, before$data$age_recalc)
+})
+
+test_that("rd_recalculate applied twice doesn't duplicate the recalculated fields", {
+  once <- rd_recalculate(covican)
+  twice <- rd_recalculate(once)
+
+  expect_equal(sum(names(twice$data) == "age_recalc"), 1)
+  expect_false(any(grepl("recalc\\.", names(twice$data))))
+  expect_equal(names(twice$data), names(once$data))
+  expect_equal(twice$dictionary, once$dictionary)
+  expect_equal(twice$data$age_recalc, once$data$age_recalc, ignore_attr = TRUE)
+  # age_recalc is not recalculated as another calculated field
+  expect_false(grepl("age_recalc", paste(twice$results, collapse = "\n")))
+})
+
+
+# ---- tibble ----
+
+test_that("rd_recalculate gives the same result with a tibble", {
+  tib <- covican
+  tib$data <- tibble::as_tibble(covican$data)
+
+  res_tib <- rd_recalculate(tib)
+
+  expect_equal(names(res_tib$data), names(rd_recalculate(covican)$data))
+  expect_false("screening_fail_crit_recalc" %in% names(res_tib$data))
+})
+
+
+# ---- Repeated instruments ----
+
+test_that("rd_recalculate works with repeated instruments", {
+  fx <- make_repeat_classic()
+  fx$data$ae_double <- c(NA, 2, 4, NA, 6)
+  fx$dictionary <- rbind(fx$dictionary, data.frame(
+    field_name = "ae_double", form_name = "ae", field_type = "calc", field_label = "Double grade",
+    choices_calculations_or_slider_labels = "[ae_grade]*2", text_validation_type_or_show_slider_number = NA,
+    branching_logic_show_field_only_if = "", stringsAsFactors = FALSE
+  ))
+
+  res <- rd_recalculate(fx)
+  expect_match(paste(res$results, collapse = "\n"), "\\|\\s+ae_double\\s+\\|\\s+Yes\\s+\\|\\s+TRUE\\s+\\|\\s+0\\s+\\|")
+  expect_false("ae_double_recalc" %in% names(res$data))
+})
+
+
+test_that("rd_recalculate compares values, not attributes such as the variable label", {
+  df <- data.frame(record_id = 1:3, w = c(60, 80, 100), h = c(160, 180, 200), bmi = c(23.4, 24.7, 25))
+  attr(df$w, "label") <- "Weight"
+  dic <- data.frame(field_name = c("record_id", "w", "h", "bmi"), form_name = "f1", field_type = c("text", "text", "text", "calc"),
+                    field_label = c("ID", "Weight", "Height", "BMI"), choices_calculations_or_slider_labels = c("", "", "", "round([w]/(([h]/100)^2),1)"),
+                    text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+
+  res <- rd_recalculate(data = df, dic = dic)
+  expect_match(paste(res$results, collapse = "\n"), "\\|\\s+bmi\\s+\\|\\s+Yes\\s+\\|\\s+TRUE\\s+\\|\\s+0\\s+\\|")
+  expect_false("bmi_recalc" %in% names(res$data))
+})
+
+
+test_that("rd_recalculate warns about excluded variables that are not calculated fields", {
+  w <- expect_warning(rd_recalculate(covican, exclude = "copd"), class = "REDCapDM_warning")
+  expect_match(conditionMessage(w), "not\\s+calculated\\s+fields")
+  expect_match(conditionMessage(w), "`copd`", fixed = TRUE)
+})
+
+test_that("rd_recalculate leaves blank the calculations without a numeric result, as REDCap", {
+  dic <- data.frame(
+    field_name = c("record_id", "a", "b", "r"), form_name = "f1", field_type = c("text", "text", "text", "calc"),
+    field_label = c("ID", "A", "B", "R"), choices_calculations_or_slider_labels = c("", "", "", "[a]/[b]"),
+    text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(record_id = 1:4, a = c(3, 0, -3, 6), b = c(0, 0, 0, 2), r = c(NA, NA, NA, 3))
+  out <- suppressWarnings(suppressMessages(rd_recalculate(data = data, dic = dic)))
+  # The values of REDCap are the same: no `_recalc` field
+  expect_false("r_recalc" %in% names(out$data))
+
+  data$r[4] <- 4
+  out <- suppressWarnings(suppressMessages(rd_recalculate(data = data, dic = dic)))
+  expect_equal(out$data$r_recalc, c(NA, NA, NA, 3), ignore_attr = TRUE)
+})
+
+test_that("rd_recalculate and rd_rlogic round very large numbers without turning them into Inf", {
+  dic <- data.frame(
+    field_name = c("record_id", "a", "r"), form_name = "f1", field_type = c("text", "text", "calc"), field_label = c("ID", "A", "R"),
+    choices_calculations_or_slider_labels = c("", "", "[a] * 1.1"), text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(record_id = 1:2, a = c(1e308, 2), r = c(1e308, 2.2))
+  out <- suppressWarnings(suppressMessages(rd_recalculate(data = data, dic = dic)))
+  expect_equal(out$data$r_recalc, c(1.1e308, 2.2), ignore_attr = TRUE)
+
+  data <- data.frame(record_id = 1:3, a = c(1e308, 1.23456, -2.555))
+  ev <- function(logic) as.vector(rd_rlogic(data = data, dic = dic, logic = logic, var = "r")$eval)
+  expect_equal(ev("round([a], 3)"), c(1e308, 1.235, -2.555))
+  expect_equal(ev("rounddown([a], 2)"), c(1e308, 1.23, -2.56))
+  expect_equal(ev("roundup([a], 2)"), c(1e308, 1.24, -2.55))
+})
+
+test_that("rounding without the number of decimals gives NA", {
+  dic <- data.frame(
+    field_name = c("record_id", "a", "p", "r"), form_name = "f1", field_type = c("text", "text", "text", "calc"), field_label = "x",
+    choices_calculations_or_slider_labels = c("", "", "", "round([a], [p])"), text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  data <- data.frame(record_id = 1:3, a = c(2.346, 2.346, 1e308), p = c(NA, 2, 2), r = c(NA, 2.35, 1e308))
+  ev <- function(logic) as.vector(rd_rlogic(data = data, dic = dic, logic = logic, var = "r")$eval)
+  expect_equal(ev("round([a], [p])"), c(NA, 2.35, 1e308))
+  expect_equal(ev("roundup([a], [p])"), c(NA, 2.35, 1e308))
+  expect_equal(ev("rounddown([a], [p])"), c(NA, 2.34, 1e308))
+  # The blank results of REDCap are right: no `_recalc` field
+  out <- suppressWarnings(suppressMessages(rd_recalculate(data = data, dic = dic)))
+  expect_false("r_recalc" %in% names(out$data))
+})
+
+
+# ---- Fields of the project whose names end in _recalc ----
+
+make_recalc_name_project <- function(type = "text") {
+  dic <- data.frame(
+    field_name = c("record_id", "a", "b", "q", "q_recalc"), form_name = "f",
+    field_type = c("text", "text", "text", "calc", type),
+    field_label = c("ID", "A", "B", "Q", "Q original"),
+    choices_calculations_or_slider_labels = c(NA, NA, NA, "[a]+[b]", if (type == "calc") "[a]*10" else NA),
+    text_validation_type_or_show_slider_number = NA, branching_logic_show_field_only_if = NA,
+    stringsAsFactors = FALSE
+  )
+  data <- data.frame(record_id = 1:3, a = c(1, 2, 3), b = c(1, 1, 1), q = c(2, 99, 4), q_recalc = c(999, 999, 999))
+  list(data = data, dictionary = dic)
+}
+
+test_that("rd_recalculate doesn't overwrite a field of the project named [field]_recalc", {
+  project <- make_recalc_name_project()
+
+  expect_warning(res <- rd_recalculate(project), "q_recalc_1")
+
+  expect_equal(res$data$q_recalc, c(999, 999, 999), ignore_attr = TRUE)
+  expect_equal(res$data$q_recalc_1, c(2, 3, 4), ignore_attr = TRUE)
+  expect_equal(names(res$data), c("record_id", "a", "b", "q", "q_recalc_1", "q_recalc"))
+  expect_equal(res$dictionary$field_label[res$dictionary$field_name == "q_recalc"], "Q original")
+  expect_equal(res$dictionary$field_label[res$dictionary$field_name == "q_recalc_1"], "Q (Recalculated)")
+
+  # Applied again, the same field is updated, without warnings
+  expect_no_warning(twice <- rd_recalculate(res))
+  expect_equal(names(twice$data), names(res$data))
+  expect_equal(twice$dictionary, res$dictionary)
+})
+
+test_that("rd_recalculate recalculates a calculated field of the project named [field]_recalc", {
+  project <- make_recalc_name_project("calc")
+  project$data$q_recalc <- c(10, 20, 0)
+
+  res <- suppressWarnings(rd_recalculate(project))
+  report <- paste(res$results, collapse = "\n")
+
+  expect_match(report, "\\|\\s+q_recalc\\s+\\|\\s+Yes\\s+\\|\\s+FALSE\\s+\\|\\s+1\\s+\\|")
+  expect_equal(res$data$q_recalc_recalc, c(10, 20, 30), ignore_attr = TRUE)
+  expect_equal(res$data$q_recalc, c(10, 20, 0), ignore_attr = TRUE)
+})
+
+test_that("rd_recalculate updates the _recalc fields of previous versions of the package", {
+  project <- make_recalc_name_project()
+  project$dictionary$field_label[5] <- "Q (Recalculate)"
+  project$dictionary$field_type[5] <- "calc"
+  project$dictionary$choices_calculations_or_slider_labels[5] <- "[a]+[b]"
+
+  expect_no_warning(res <- rd_recalculate(project))
+  expect_equal(res$data$q_recalc, c(2, 3, 4), ignore_attr = TRUE)
+  expect_false("q_recalc_1" %in% names(res$data))
+  # q_recalc is not recalculated as another calculated field
+  expect_false(grepl("q_recalc ", paste(res$results, collapse = "\n")))
+})
+
+test_that("rd_recalculate labels the recalculated fields and summarises without calculated fields", {
+  res <- rd_recalculate(covican)
+  expect_equal(res$dictionary$field_label[res$dictionary$field_name == "age_recalc"], "Age (Recalculated)")
+  expect_match(paste(res$results, collapse = "\n"), "Fields with different recalculated values", fixed = TRUE)
+
+  # Every calculated field excluded: there is no percentage
+  project <- make_recalc_name_project()
+  report <- paste(rd_recalculate(project, exclude = "q")$results, collapse = "\n")
+  expect_false(grepl("NaN", report))
+  expect_match(report, "\\|\\s+0\\s+\\|\\s+0 \\(-\\)\\s+\\|\\s+0 \\(-\\)\\s+\\|")
+})
+
+test_that("rd_recalculate doesn't take a field of the project for one of its fields because of its label", {
+  # A text field, with the label of the current and of previous versions
+  for (label in c("Q (Recalculated)", "Q (Recalculate)")) {
+    project <- make_recalc_name_project()
+    project$dictionary$field_label[5] <- label
+
+    expect_warning(res <- rd_recalculate(project), "q_recalc_1")
+    expect_equal(res$data$q_recalc, c(999, 999, 999), ignore_attr = TRUE)
+    expect_equal(res$data$q_recalc_1, c(2, 3, 4), ignore_attr = TRUE)
+  }
+
+  # A calculated field with another calculation is recalculated as a field of its own
+  project <- make_recalc_name_project("calc")
+  project$dictionary$field_label[5] <- "Q (Recalculated)"
+  project$data$q_recalc <- c(10, 20, 0)
+
+  expect_warning(res <- rd_recalculate(project), "q_recalc_1")
+  expect_equal(res$data$q_recalc, c(10, 20, 0), ignore_attr = TRUE)
+  expect_equal(res$data$q_recalc_1, c(2, 3, 4), ignore_attr = TRUE)
+  expect_equal(res$data$q_recalc_recalc, c(10, 20, 30), ignore_attr = TRUE)
+})
+
+test_that("rd_recalculate doesn't overwrite a column of the data that isn't in the dictionary", {
+  project <- make_recalc_name_project()
+  project$dictionary <- project$dictionary[1:4, ]
+
+  expect_warning(res <- rd_recalculate(project), "q_recalc_1")
+  expect_equal(res$data$q_recalc, c(999, 999, 999), ignore_attr = TRUE)
+  expect_equal(res$data$q_recalc_1, c(2, 3, 4), ignore_attr = TRUE)
+})
+
+test_that("rd_recalculate updates its fields with a dictionary without field_label", {
+  project <- make_recalc_name_project()
+  project$dictionary <- project$dictionary[1:4, setdiff(names(project$dictionary), "field_label")]
+  project$data$q_recalc <- NULL
+
+  once <- rd_recalculate(project)
+  expect_equal(names(once$data), c("record_id", "a", "b", "q", "q_recalc"))
+
+  expect_no_warning(twice <- rd_recalculate(once))
+  expect_no_warning(thrice <- rd_recalculate(twice))
+  expect_equal(names(thrice$data), names(once$data))
+  expect_equal(thrice$dictionary, once$dictionary)
+  expect_equal(thrice$data$q_recalc, c(2, 3, 4), ignore_attr = TRUE)
+})
+
+test_that("rd_recalculate compares the numbers written in another way (text, TRUE/FALSE) as numbers", {
+  data <- data.frame(record_id = 1:4, flag = c(1, 0, 0, 1), other = c(1, NA, 3, NA), big = c(100000, 200000, 200000, 100000), is1 = c(1, 0, 0, 1), blank = c(0, 1, 0, 1))
+  dic <- data.frame(field_name = c("record_id", "flag", "other", "big", "is1", "blank"), form_name = "f", field_type = c("text", "text", "text", "calc", "calc", "calc"),
+                    field_label = c("ID", "Flag", "Other", "Big", "Is 1", "Blank"),
+                    choices_calculations_or_slider_labels = c("", "", "", "if([flag] = 1, '100000', '200000')", "[flag] = 1", "isblankormissingcode([other])"),
+                    branching_logic_show_field_only_if = "", text_validation_type_or_show_slider_number = "")
+  for (scipen in c(0, 999)) {
+    withr::local_options(scipen = scipen)
+    res <- suppressWarnings(suppressMessages(rd_recalculate(data = data, dic = dic)))
+    expect_false(any(grepl("_recalc$", names(res$data))))
+  }
+  expect_equal(count_differences(c(100000, 1, 0), c("100000", "1", "0")), 0L)
+  expect_equal(count_differences(c(1, 0, NA), c(TRUE, FALSE, NA)), 0L)
+  expect_equal(count_differences(c(1, 0), c(FALSE, FALSE)), 1L)
+  # (texts that are not numbers are compared as texts)
+  expect_equal(count_differences(c("a", "b"), c("a", "c")), 1L)
+})
+
+test_that("rd_recalculate doesn't take a calculated field that isn't in the data as equal", {
+  data <- data.frame(record_id = 1:2, a = c(1, 2))
+  dic <- data.frame(field_name = c("record_id", "a", "q"), form_name = "f", field_type = c("text", "text", "calc"), field_label = c("ID", "A", "Q"),
+                    choices_calculations_or_slider_labels = c("", "", "[a] * 2"), branching_logic_show_field_only_if = "",
+                    text_validation_type_or_show_slider_number = "")
+  expect_warning(res <- suppressMessages(rd_recalculate(data = data, dic = dic)), "not in the data")
+  expect_false("q_recalc" %in% names(res$data))
+  report <- paste(res$results, collapse = "\n")
+  expect_match(report, "\\|\\s*q\\s*\\|\\s*Yes\\s*\\|\\s*NA\\s*\\|\\s*NA\\s*\\|")
+})

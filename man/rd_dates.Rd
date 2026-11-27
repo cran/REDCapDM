@@ -25,7 +25,7 @@ A list with the following elements:
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Converts date and datetime fields in a REDCap dataset to appropriate R classes.
 }
@@ -34,7 +34,9 @@ The function performs the following tasks:
 \itemize{
 \item Detects date and datetime fields from the REDCap dictionary (\verb{date_*} and \verb{datetime_*} validation types).
 \item Converts date fields to \code{Date} class.
-\item Converts datetime fields to \code{POSIXct} class, treating empty strings as \code{NA}.
+\item Converts datetime fields to \code{POSIXct} class, treating empty strings as \code{NA}. The texts are read in UTC, whatever the time zone of the session (e.g. \code{TZ = "Europe/Paris"}): the time is kept as it is written in REDCap (e.g. \verb{2024-01-05 10:30} is 10:30 UTC). The fields that are already \code{POSIXct} are left as they are.
+\item Each value is converted on its own (\code{YYYY-MM-DD} or \code{YYYY/MM/DD}, with or without time): a value that isn't a date or a
+datetime (e.g. a Missing Data Code that wasn't removed) is set to \code{NA}, and a warning lists the fields and the values.
 }
 }
 \examples{
@@ -42,3 +44,16 @@ result <- rd_dates(covican)
 transformed_data <- result$data
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

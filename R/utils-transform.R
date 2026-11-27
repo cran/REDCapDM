@@ -2,7 +2,7 @@
 #'
 #' Recalculate REDCap Calculated Fields
 #' @description
-#' This function recalculates each calculated field if the logic can be transcribed to R. Note that calculated fields containing smart-variables or variables from other events cannot be transcribed.
+#' This function recalculates each calculated field if the logic can be transcribed to R. Note that calculated fields containing smart variables, or variables of another repeating instrument or repeating event without their instance, cannot be transcribed (the variables of other events, e.g. `[visit_2_arm_1][weight]`, and `[event][field][current-instance]` can).
 #'
 #' The function returns the dataset and dictionary with the recalculated variables appended (named as the original field plus `_recalc`), along with a summary table of the recalculation results.
 #' @param data Data frame containing data from REDCap.
@@ -10,8 +10,7 @@
 #' @param event_form Data frame  containing the correspondence of each event with each form.
 #' @param exclude_recalc Character vector with the names of the variables that should not be recalculated. Useful for projects with time-consuming recalculations for certain calculated fields.
 #' @importFrom rlang :=
-
-############Calculated functions############
+#' @keywords internal
 recalculate <- function(data, dic, event_form = NULL, exclude_recalc = NULL){
 
   lifecycle::deprecate_warn("1.0.0", "recalculate()", "rd_recalculate()")
@@ -148,7 +147,7 @@ recalculate <- function(data, dic, event_form = NULL, exclude_recalc = NULL){
 #' @param dic Data frame  containing the dictionary read from REDCap.
 #' @param event_form Data frame  containing the correspondence of each event with each form.
 #' @param checkbox_na Logical indicating if values of checkboxes with branching logic should be set to missing only when the branching logic is missing (`FALSE`), or also when the branching logic is not satisfied (`TRUE`). The default is `FALSE`.
-
+#' @keywords internal
 transform_checkboxes <- function(data, dic, event_form = NULL, checkbox_na = FALSE){
 
   lifecycle::deprecate_warn("1.0.0", "transform_checkboxes()", "rd_checkbox()")
@@ -237,7 +236,7 @@ transform_checkboxes <- function(data, dic, event_form = NULL, checkbox_na = FAL
 #' @param dic Dataset containing the REDCap dictionary.
 #' @param labels Named character vector with the names of the variables in the data and their corresponding REDCap labels.
 #' @param checkbox_labels Character vector specifying the names for the two options of each checkbox variable. The default is `c('No', 'Yes')`.
-
+#' @keywords internal
 checkbox_names <- function(data, dic, labels, checkbox_labels = c("No", "Yes")){
 
   lifecycle::deprecate_warn("1.0.0", "checkbox_names()", "rd_checkbox()")
@@ -292,7 +291,7 @@ checkbox_names <- function(data, dic, labels, checkbox_labels = c("No", "Yes")){
       #Make unique if the name was already present in the names of the data
       out[j] <- utils::tail(make.unique(c(names(data), out[j])), 1)
       if(out[j] != out0) {
-        warning(stringr::str_glue("The new name after the transformation of the checkox ({out0}) was already present in the data so it will be transformed to {out[j]}"))
+        warning(stringr::str_glue("The new name after the transformation of the checkbox ({out0}) was already present in the data so it will be transformed to {out[j]}"))
       }
       #Change the name in the data and in the dictionary:
       names(data) <- dplyr::case_when(
@@ -364,7 +363,7 @@ checkbox_names <- function(data, dic, labels, checkbox_labels = c("No", "Yes")){
 #' @param dic Data frame  containing the dictionary read from REDCap.
 #' @param event_form Data frame containing the correspondence of each event with each form.
 #' @param which Character string specifying an event if only data for that event is desired.
-
+#' @keywords internal
 split_event <- function(data,dic,event_form,which=NULL){
 
   lifecycle::deprecate_warn("1.0.0", "split_event()", "rd_split()")
@@ -458,7 +457,7 @@ split_event <- function(data,dic,event_form,which=NULL){
 #' @param which Character string specifying a form if only data for that form is desired.
 #' @param wide Logical indicating if the dataset should be returned in a wide format (`TRUE`) or long format (`FALSE`).
 #' @importFrom magrittr `%>%`
-
+#' @keywords internal
 split_form <- function(data, dic, event_form = NULL, which = NULL, wide=FALSE){
 
   lifecycle::deprecate_warn("1.0.0", "split_form()", "rd_split()")
@@ -557,48 +556,48 @@ split_form <- function(data, dic, event_form = NULL, which = NULL, wide=FALSE){
   }
 
   if(repeat_instrument)  {
-    form_check <- data %>%
-    dplyr::distinct(.data$redcap_repeat_instrument, .data$redcap_repeat_instrument.factor)
+    # The rows of each form are chosen by the code of its repeating instrument; its label (factor version) is only shown,
+    # when the data has it. Only the columns of REDCap are removed (not e.g. a field `redcap_repeat_instrument_note`)
+    # (an instrument written with spaces, e.g. " ", is no instrument: the base row)
+    instrument <- repeat_instrument_values(data)
+    repeating_forms <- unique(instrument[!is.na(instrument)])
 
     ndata <- ndata %>%
-      dplyr::left_join(form_check, by = dplyr::join_by("form" == "redcap_repeat_instrument")) %>%
-      dplyr::relocate("form_factor" = "redcap_repeat_instrument.factor", .after = form) %>%
-      dplyr::mutate(df = purrr::map2(.data$form_factor, .data$df, ~ {
-        if (is.na(.x)) {
+      dplyr::mutate(df = purrr::map2(.data$form, .data$df, ~ {
+        code <- repeat_instrument_values(.y)
+        if (!.x %in% repeating_forms) {
           .y %>%
-            dplyr::filter(is.na(.data$redcap_repeat_instrument.factor)) %>%
-            dplyr::select(-dplyr::starts_with("redcap_repeat_instrument"))
+            dplyr::slice(which(is.na(code))) %>%
+            dplyr::select(-dplyr::any_of(c("redcap_repeat_instrument", "redcap_repeat_instrument.factor")))
         } else {
-          .y %>%
-            dplyr::filter(.data$redcap_repeat_instrument.factor == .x) %>%
-            dplyr::mutate(redcap_repeat_instrument = redcap_repeat_instrument.factor) %>%
-            dplyr::select(-redcap_repeat_instrument.factor)
+          # In the events where the form doesn't repeat, its rows are the base rows of the record (a form can repeat only
+          # in some events)
+          normal <- if ("redcap_event_name" %in% names(.y)) {
+            is.na(code) & !.y$redcap_event_name %in% unique(data$redcap_event_name[instrument %in% .x])
+          } else {
+            rep(FALSE, nrow(.y))
+          }
+          out <- .y %>%
+            dplyr::slice(which(normal | code %in% .x))
+          if ("redcap_repeat_instrument.factor" %in% names(out)) {
+            out$redcap_repeat_instrument <- instrument_labels(out)
+          }
+          out %>%
+            dplyr::select(-dplyr::any_of("redcap_repeat_instrument.factor"))
         }
-      })) %>%
-      dplyr::select(-"form_factor")
+      }))
   }
 
 
-  if(repeat_instrument)  {
-    form_check <- data |>
-    dplyr::distinct(dplyr::pick(dplyr::contains("redcap_repeat_instrument")))
-
+  if (repeat_instrument) {
     ndata <- ndata |>
-      dplyr::left_join(form_check, by = dplyr::join_by("form" == "redcap_repeat_instrument")) |>
-      dplyr::relocate("form_factor" = "redcap_repeat_instrument.factor", .after = form) |>
-      dplyr::mutate(df = purrr::map2(.data$form_factor, .data$df, ~ {
-        if (is.na(.x)) {
-          .y |>
-            dplyr::filter(is.na(.data$redcap_repeat_instrument.factor)) |>
-            dplyr::select(-dplyr::starts_with("redcap_repeat_instrument"))
-        } else {
-          .y |>
-            dplyr::filter(.data$redcap_repeat_instrument.factor == .x) |>
-            dplyr::mutate(redcap_repeat_instrument = redcap_repeat_instrument.factor) |>
-            dplyr::select(-redcap_repeat_instrument.factor)
-        }
-      })) |>
-      dplyr::select(-"form_factor")
+      dplyr::mutate(
+        vars = purrr::map2(
+          .data$vars,
+          .data$df,
+          ~ intersect(.x, names(.y))
+        )
+      )
   }
 
 
@@ -609,13 +608,18 @@ split_form <- function(data, dic, event_form = NULL, which = NULL, wide=FALSE){
 
     ndata <- ndata |>
       dplyr::mutate(
-        df = purrr::map2(.data$vars, .data$df, ~ .y |>
-                         dplyr::select(tidyselect::all_of(c("record_id", .x))) |>
-                         dplyr::group_by(.data$record_id) |>
-                         dplyr::mutate(id = 1:length(.data$record_id)) |>
-                         dplyr::ungroup() |>
-                         tidyr::pivot_wider(names_from = "id", values_from = -c("record_id", "id"))
-             )
+        df = purrr::map2(.data$vars, .data$df, ~ {
+          y <- .y |>
+            dplyr::select(tidyselect::all_of(unique(c("record_id", .x))))
+          # A form with only the record identifier: one row per record
+          if (identical(names(y), "record_id")) {
+            return(y |> dplyr::slice(which(!duplicated(y$record_id))))
+          }
+          # (the number of each row of a record, in a column whose name isn't one of the data, e.g. a field `id`)
+          number <- utils::tail(make.unique(c(names(y), "id")), 1)
+          y[[number]] <- stats::ave(seq_len(nrow(y)), match(y$record_id, unique(y$record_id)), FUN = seq_along)
+          tidyr::pivot_wider(y, names_from = dplyr::all_of(number), values_from = -dplyr::all_of(c("record_id", number)))
+        })
       )
 
   }
@@ -641,7 +645,7 @@ split_form <- function(data, dic, event_form = NULL, which = NULL, wide=FALSE){
 #' @param data Data frame containing the REDCap data.
 #' @param dic Data frame containing the REDCap dictionary.
 #' @param exclude Character vector specifying the names of variables that should not be converted to factors. If `NULL`, all variables will be converted.
-
+#' @keywords internal
 to_factor <- function(data, dic, exclude = NULL){
 
   lifecycle::deprecate_warn("1.0.0", "to_factor()", "rd_factor()")
@@ -721,4 +725,3 @@ to_factor <- function(data, dic, exclude = NULL){
     list(data = data, dic = dic)
   }
 }
-

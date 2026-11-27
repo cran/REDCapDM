@@ -33,17 +33,22 @@ A list with:
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Recalculates fields marked as calculated in the REDCap dictionary, compares them with the original values, and reports discrepancies. If any differences are found, new recalculated fields are added to the dataset and dictionary with \verb{_recalc} appended to the names.
 }
 \details{
 \itemize{
-\item Fields of type \code{calc} in the dictionary are recalculated.
-\item Recalculated values are compared with the original values.
-\item If differences exist, new fields \verb{[field_name]_recalc} are added to the dataset and dictionary.
+\item Fields of type \code{calc} in the dictionary are recalculated. As in REDCap, a calculation without a numeric result (e.g. a division by zero) is blank (\code{NA}).
+\item Recalculated values are compared with the original values, both rounded to three decimals (e.g. 1.0004 and 1 are equal).
+\item If differences exist, new fields \verb{[field_name]_recalc} are added to the dataset and dictionary, with the label of the original field followed by \code{(Recalculated)}. Running the function again on its output updates these fields instead of duplicating them.
+\item The fields added by this function are recognised because they are calculated fields with the same calculation as the original field and, when the dictionary has the column \code{field_label}, its label followed by \code{(Recalculated)} (or by \code{(Recalculate)}, the label of previous versions of the package, which are also recognised). No other field or column is overwritten: if \verb{[field_name]_recalc} is already one of them, the recalculated values are saved in \verb{[field_name]_recalc_1} (or \verb{_2}, ...) with a warning.
 \item Works for single-event projects; for longitudinal projects, \code{event_form} must be provided.
-\item Fields with incomplete branching logic or smart variables may fail to recalculate.
+\item The calculation of each field is translated to R with \code{\link[=rd_rlogic]{rd_rlogic()}}: calculations that can't be translated (e.g. with smart variables or functions that it doesn't know) are not recalculated, and \verb{Transcribed?} is \code{No}.
+\item The original and recalculated values are compared as numbers when both are numbers, also written as text (e.g. \code{'100000'}, the result of \verb{if()} with texts) or as \code{TRUE}/\code{FALSE} (the 1/0 of a condition), rounded to 3 decimals: the comparison doesn't depend on how R writes the numbers.
+\item A calculated field of the dictionary that isn't in the data can't be compared: a warning is shown, and its \verb{Is equal?} and \verb{Different values} are \code{NA}.
+\item Existing generated columns are refreshed even when the original values now agree with the calculation. If a formula cannot be translated or evaluated, its previously generated column is set to \code{NA} with a warning. Excluded fields and their generated columns are left unchanged.
+\item Unsupported formulas are reported as non-transcribed in \code{results}; they do not stop the recalculation of other fields. Restrictions on repeated-source references are those of \code{\link[=rd_rlogic]{rd_rlogic()}}.
 }
 }
 \examples{
@@ -65,3 +70,16 @@ results <- rd_recalculate(
 }
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

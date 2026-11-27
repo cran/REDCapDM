@@ -1,7 +1,7 @@
 #' Transform Dates and Datetimes in REDCap Data
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #'
 #' Converts date and datetime fields in a REDCap dataset to appropriate R classes.
 #'
@@ -22,13 +22,16 @@
 #' The function performs the following tasks:
 #' * Detects date and datetime fields from the REDCap dictionary (`date_*` and `datetime_*` validation types).
 #' * Converts date fields to `Date` class.
-#' * Converts datetime fields to `POSIXct` class, treating empty strings as `NA`.
+#' * Converts datetime fields to `POSIXct` class, treating empty strings as `NA`. The texts are read in UTC, whatever the time zone of the session (e.g. `TZ = "Europe/Paris"`): the time is kept as it is written in REDCap (e.g. `2024-01-05 10:30` is 10:30 UTC). The fields that are already `POSIXct` are left as they are.
+#' * Each value is converted on its own (`YYYY-MM-DD` or `YYYY/MM/DD`, with or without time): a value that isn't a date or a
+#'   datetime (e.g. a Missing Data Code that wasn't removed) is set to `NA`, and a warning lists the fields and the values.
 #'
 #'
 #' @examples
 #' result <- rd_dates(covican)
 #' transformed_data <- result$data
 #'
+#' @family process functions
 #' @export
 #' @importFrom stats na.omit
 
@@ -43,9 +46,14 @@ rd_dates <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL)
   }
 
   # Ensure both `data` and `dic` are provided; stop if either is missing
-  if (is.null(data) | is.null(dic)) {
-    stop("Both `data` and `dic` (data and dictionary) arguments must be provided.")
+  if (is.null(data) || is.null(dic)) {
+    rd_abort("Both {.arg data} and {.arg dic} (data and dictionary) arguments must be provided.")
   }
+  
+  # Error: invalid arguments
+  check_inputs(data, dic, dic_cols = c("field_name", "text_validation_type_or_show_slider_number"))
+  data <- plain_data(data)
+  dic <- plain_dic(dic)
 
   # Extract labels from the data to reapply later
   labels <- labels <- purrr::map_chr(data, function(x) {
@@ -57,10 +65,11 @@ rd_dates <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL)
     }
   })
 
-  # Identify date variables in the dictionary (those with `date_` in validation type)
+  # Identify date variables in the dictionary (those with `date_` in validation type) that are in the data
   var_date <- dic |>
     dplyr::filter(grepl("^date_", .data$text_validation_type_or_show_slider_number)) |>
-    dplyr::pull(.data$field_name)
+    dplyr::pull(.data$field_name) |>
+    intersect(names(data))
 
   var_date_valid <- data |>
     dplyr::select(dplyr::all_of(var_date)) |>
@@ -70,7 +79,8 @@ rd_dates <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL)
   # Identify datetime variables in the dictionary (those with `datetime_` in validation type)
   var_datetime <- dic |>
     dplyr::filter(grepl("^datetime_", .data$text_validation_type_or_show_slider_number)) |>
-    dplyr::pull(.data$field_name)
+    dplyr::pull(.data$field_name) |>
+    intersect(names(data))
 
   var_datetime_valid <- data |>
     dplyr::select(dplyr::all_of(var_datetime)) |>
@@ -78,21 +88,46 @@ rd_dates <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL)
     names()
 
   # Validation for Date/Datetime Formatting
-  if (identical(var_date, var_date_valid) & identical(var_datetime, var_datetime_valid)) {
-    warning("All date and datetime variables are already in the correct format. No transformation applied.", call. = FALSE)
+  if (identical(var_date, var_date_valid) && identical(var_datetime, var_datetime_valid)) {
+    rd_inform("All date and datetime variables are already in the correct format. No transformation applied.")
   } else {
     var_date <- setdiff(var_date, var_date_valid)
 
     var_datetime <- setdiff(var_datetime, var_datetime_valid)
 
-    # Convert date variables in the data to `Date` class
-    data <- data |>
-      dplyr::mutate_at(var_date, as.Date) |>
-      # Convert datetime variables to `POSIXct` class, handling empty strings as NA
-      dplyr::mutate_at(var_datetime, function(x) {
-        x <- dplyr::case_when(x == "" ~ NA, TRUE ~ x)
-        as.POSIXct(x, origin = "1970-01-01", tz = "UTC")
-      })
+    # Convert date variables to `Date` class and datetime variables to `POSIXct` class (empty strings are NA)
+    # (value by value: as.Date() and as.POSIXct() choose one format for the whole column, so a value that isn't a date stops
+    # them or turns other dates into NA)
+    not_dates <- list()
+    for (var in var_date) {
+      converted <- convert_dates(data[[var]], c("%Y-%m-%d", "%Y/%m/%d"), datetime = FALSE)
+      data[[var]] <- converted$value
+      not_dates[[var]] <- converted$not_dates
+    }
+    for (var in var_datetime) {
+      converted <- convert_dates(
+        data[[var]],
+        c("%Y-%m-%d %H:%M:%OS", "%Y/%m/%d %H:%M:%OS", "%Y-%m-%d %H:%M", "%Y/%m/%d %H:%M", "%Y-%m-%d", "%Y/%m/%d"),
+        datetime = TRUE
+      )
+      data[[var]] <- converted$value
+      not_dates[[var]] <- converted$not_dates
+    }
+
+    # Warning: values that aren't dates
+    not_dates <- not_dates[lengths(not_dates) > 0]
+    if (length(not_dates) > 0) {
+      details <- vapply(names(not_dates), function(var) {
+        values <- unique(not_dates[[var]])
+        shown <- paste0("\"", gsub("([{}])", "\\1\\1", utils::head(values, 3)), "\"", collapse = ", ")
+        sprintf("{.var %s}: %d value%s (%s%s)", var, length(not_dates[[var]]), if (length(not_dates[[var]]) > 1) "s" else "", shown, if (length(values) > 3) ", ..." else "")
+      }, character(1))
+      rd_warn(c(
+        "Some values of the date and datetime fields aren't dates. They are set to NA:",
+        stats::setNames(details, rep("*", length(details))),
+        "i" = "If they are Missing Data Codes of the project, give them in the {.arg mdc} argument of {.fn redcap_data}."
+      ))
+    }
   }
 
   # Reapply variable labels to the data after transformation
@@ -126,4 +161,63 @@ rd_dates <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL)
     results = stringr::str_glue("{results}")
   ) |>
     purrr::compact() # Remove NULL elements from the list
+}
+
+
+#' Convert the values of a date or datetime field, one by one
+#'
+#' @param x Values of the field.
+#' @param formats Formats tried in order for each value.
+#' @param datetime Whether the field is a datetime (`POSIXct` in UTC) or a date (`Date`).
+#' @return A list with the converted values (`value`) and the values that aren't dates (`not_dates`).
+#' @noRd
+convert_dates <- function(x, formats, datetime) {
+  # Numbers are days (dates) or seconds (datetimes) since 1970-01-01, as before
+  if (is.numeric(x)) {
+    value <- if (datetime) as.POSIXct(x, origin = "1970-01-01", tz = "UTC") else as.Date(x, origin = "1970-01-01")
+    return(list(value = value, not_dates = character(0)))
+  }
+
+  text <- trimws(as.character(x))
+  text[text %in% ""] <- NA
+  value <- if (datetime) as.POSIXct(rep(NA_real_, length(text)), origin = "1970-01-01", tz = "UTC") else as.Date(rep(NA_real_, length(text)), origin = "1970-01-01")
+  for (format in formats) {
+    # Each value is converted with the format that it follows completely: as.Date() and as.POSIXct() ignore the text after
+    # the format (e.g. `2024-02-29 99:00:00` would be a date at midnight, and `2024-02-29trailing` a date)
+    pending <- is.na(value) & !is.na(text) & grepl(date_pattern(format), text)
+    if (!any(pending)) {
+      next
+    }
+    value[pending] <- if (datetime) as.POSIXct(text[pending], format = format, tz = "UTC") else as.Date(text[pending], format = format)
+  }
+
+  # A time out of range isn't a date: as.POSIXct() changes it without warning (`12:30:99` is 12:30:00, `12:30:60` is
+  # 12:31:00 and `24:00` the next day)
+  if (datetime) {
+    time <- regmatches(text, regexec("[[:space:]]([0-9]{1,2}):([0-9]{1,2})(:([0-9]{1,2})([.][0-9]+)?)?$", text))
+    wrong_time <- vapply(time, function(parts) {
+      if (length(parts) == 0) {
+        return(FALSE)
+      }
+      numbers <- suppressWarnings(as.numeric(parts[c(2, 3, 5)]))
+      isTRUE(numbers[1] > 23) || isTRUE(numbers[2] > 59) || isTRUE(numbers[3] > 59)
+    }, logical(1))
+    value[wrong_time] <- NA
+  }
+
+  list(value = value, not_dates = text[is.na(value) & !is.na(text)])
+}
+
+#' Regular expression of the whole text of a date or datetime format
+#'
+#' @param format A format of `convert_dates()` (with `%Y`, `%m`, `%d`, `%H`, `%M` and `%OS`).
+#' @return The regular expression.
+#' @noRd
+date_pattern <- function(format) {
+  parts <- c("%Y" = "[0-9]{4}", "%m" = "[0-9]{1,2}", "%d" = "[0-9]{1,2}", "%H" = "[0-9]{1,2}", "%M" = "[0-9]{1,2}", "%OS" = "[0-9]{1,2}([.][0-9]+)?")
+  pattern <- gsub(" ", "[[:space:]]+", format, fixed = TRUE)
+  for (part in names(parts)) {
+    pattern <- gsub(part, parts[[part]], pattern, fixed = TRUE)
+  }
+  paste0("^", pattern, "$")
 }

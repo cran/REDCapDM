@@ -27,13 +27,14 @@ test_that("rd_insert_na inserts NA when filter condition is met (using event_for
 
   filter_expr <- paste0(v1, " < ", threshold_value)
 
-  result <- rd_insert_na(
+  # The filter can match no row in these records (rd_insert_na() then warns)
+  result <- suppressWarnings(rd_insert_na(
     data = df,
     dic = dic,
     vars = v2,
     filter = filter_expr,
     event_form = covican$event_form
-  )
+  ))
 
   # construct expected result
   expected <- df[[v2]]
@@ -72,12 +73,15 @@ test_that("rd_insert_na leaves data unchanged when filter matches no rows (with 
 
   # an impossible filter so no rows match
   filter_expr <- paste0(v1, " > 1e12")
-  result <- rd_insert_na(
-    data = df,
-    dic = dic,
-    vars = v2,
-    filter = filter_expr,
-    event_form = covican$event_form
+  expect_warning(
+    result <- rd_insert_na(
+      data = df,
+      dic = dic,
+      vars = v2,
+      filter = filter_expr,
+      event_form = covican$event_form
+    ),
+    "No row meets the filter"
   )
 
   expect_equal(result$data, df)  # nothing should change
@@ -100,7 +104,8 @@ test_that("rd_insert_na errors if longitudinal but event_form missing", {
       vars = v1,
       filter = paste0(v1, " == 1")
     ),
-    "The dataset contains multiple events, but the `event_form` mapping was not provided. Please specify it."
+    "The data is longitudinal (it has the column `redcap_event_name`), but the `event_form` mapping was not provided.",
+    fixed = TRUE
   )
 })
 
@@ -191,11 +196,178 @@ test_that("rd_insert_na reapplies variable labels after transformation", {
 
   filter_expr <- "inc_1== 1 & resp_rate== 1"
 
-  result <- rd_insert_na(
+  # No record meets the filter (rd_insert_na() then warns)
+  result <- suppressWarnings(rd_insert_na(
       data = covican$data, dic = covican$dictionary,
       vars = "copd", filter = filter_expr,
       event_form = covican$event_form
-  )
+  ))
 
   expect_equal(labelled::var_label(result$data)[["type_dm"]], "Type of diabetes")
+})
+
+
+
+# ---- Non-longitudinal projects ----
+
+test_that("rd_insert_na works in non-longitudinal projects", {
+  data <- data.frame(record_id = 1:4, age = c(30, 70, 45, 80), smoker = c(1, 0, 1, 1))
+  attr(data$smoker, "label") <- "Smoker"
+  dic <- data.frame(field_name = c("record_id", "age", "smoker"), form_name = "demo")
+
+  res <- rd_insert_na(data = data, dic = dic, vars = "smoker", filter = "age > 60")
+
+  expect_equal(res$data$smoker, c(1, NA, 1, NA), ignore_attr = TRUE)
+  expect_equal(attr(res$data$smoker, "label"), "Smoker")
+  expect_null(attr(res$data$age, "label"))
+  expect_false("event_form" %in% names(res))
+})
+
+test_that("rd_insert_na accepts filters with R functions, parentheses and objects of the session", {
+  na_dm <- function(filter) suppressWarnings(rd_insert_na(covican, vars = "dm", filter = filter))$data$dm
+  expected <- na_dm("age > 70")
+  for (filter in c("abs(age) > 70", "(age > 70)", "((age > 70))", "round(age) > 70", "dplyr::between(age, 70.000001, Inf)")) {
+    expect_equal(na_dm(filter), expected, info = filter)
+  }
+  limit <- 70
+  expect_equal(na_dm("age > limit"), expected)
+  # A variable that doesn't exist is still an error
+  expect_error(rd_insert_na(covican, vars = "dm", filter = "abs(no_variable) > 1"), "not found in data")
+})
+
+test_that("rd_insert_na accepts columns chosen with objects of the session and logical vectors of the session", {
+  na_dm <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(covican, vars = "dm", filter = filter)))$data$dm
+  expected <- na_dm("age > 30")
+  field <- "age"
+  cutoff <- 30
+  for (filter in c(".data[[field]] > cutoff", "data[[field]] > cutoff", ".data[['age']] > cutoff", ".data$age > cutoff")) {
+    expect_equal(na_dm(filter), expected, info = filter)
+  }
+  # A logical vector of the session (the events of the variable are kept)
+  eligible <- !is.na(covican$data$age) & covican$data$age > 30
+  expect_equal(na_dm("eligible"), expected)
+  short <- c(TRUE, FALSE)
+  expect_error(rd_insert_na(covican, vars = "dm", filter = "short"), "did not return a logical vector", class = "REDCapDM_error_argument")
+  # A column chosen with an object that isn't one is still an error
+  field <- "no_variable"
+  expect_error(rd_insert_na(covican, vars = "dm", filter = ".data[[field]] > 1"), "not found in data")
+})
+
+test_that("rd_insert_na doesn't take the components of objects of the session for variables", {
+  na_dm <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(covican, vars = "dm", filter = filter)))$data$dm
+  expected <- na_dm("age > 30")
+  settings <- list(threshold = 30)
+  for (filter in c("age > settings$threshold", "age > .env$settings$threshold", "age > settings[['threshold']]", "age > .env$settings[['threshold']]")) {
+    expect_equal(na_dm(filter), expected, info = filter)
+  }
+  expect_error(rd_insert_na(covican, vars = "dm", filter = "no_variable > settings$threshold"), "not found in data")
+  # Neither the arguments of a function written in the filter, nor the empty arguments of `[`
+  expect_equal(na_dm("sapply(age, function(v) isTRUE(v > 30))"), expected)
+  expect_equal(na_dm("data[, 'age'] > 30"), expected)
+})
+
+test_that("rd_insert_na doesn't take the arguments of the formulas of purrr for variables", {
+  na_dm <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(covican, vars = "dm", filter = filter)))$data$dm
+  cutoff <- 30
+  expected <- na_dm("age > cutoff")
+  for (filter in c("purrr::map_lgl(age, ~ isTRUE(.x > cutoff))", "purrr::map_lgl(age, ~ isTRUE(..1 > cutoff))", "purrr::map2_lgl(age, cutoff, ~ isTRUE(.x > .y))")) {
+    expect_equal(na_dm(filter), expected, info = filter)
+  }
+  expect_error(rd_insert_na(covican, vars = "dm", filter = "purrr::map_lgl(no_variable, ~ .x > 1)"), "not found in data")
+})
+
+
+# ---- Identifier in the filter ----
+
+test_that("rd_insert_na takes the identifier as present in every event", {
+  for (id in c("record_id", "subject_id")) {
+    project <- make_custom_id(id)
+
+    res <- rd_insert_na(project, vars = "value", filter = paste0(id, " == '003'"))
+    expect_equal(res$data$value, c(NA, 5, NA, NA, NA))
+
+    res <- rd_insert_na(project, vars = "value", filter = paste0(id, " == '003' & value > 6"))
+    expect_equal(res$data$value, c(NA, 5, NA, NA, NA))
+  }
+
+  # The other variables of the filter still choose the events
+  expect_error(rd_insert_na(make_custom_id(), vars = "value", filter = "subject_id == '003' & age > 50"), "do not overlap")
+})
+
+test_that("rd_insert_na checks the events of the columns chosen with [ in the filter, as with $ and [[", {
+  data <- data.frame(record_id = c("1", "1", "2", "2"), redcap_event_name = c("a_arm_1", "b_arm_1", "a_arm_1", "b_arm_1"),
+                     age = NA, x = c(NA, 5, NA, 6))
+  dic <- data.frame(field_name = c("record_id", "age", "x"), form_name = c("fa", "fa", "fb"), field_type = "text", field_label = c("ID", "Age", "X"))
+  ef <- data.frame(arm_num = 1, unique_event_name = c("a_arm_1", "a_arm_1", "b_arm_1"), form = c("fa", "base", "fb"))
+  run <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(data = data, dic = dic, event_form = ef, vars = "x", filter = filter)))
+  # `age` is only in the event a, and `x` only in b: the values 5 and 6 of x are kept
+  for (filter in c("is.na(age)", "is.na(data$age)", "is.na(data[['age']])", "is.na(data[, 'age'])", "is.na(data[, 3])", "is.na(data[, c('age')])")) {
+    expect_error(run(filter), "do not overlap")
+  }
+  # (a column of the events of x)
+  expect_equal(run("data[, 'x'] %in% 5")$data$x, c(NA, NA, NA, 6))
+})
+
+test_that("rd_insert_na rejects the filters that use the data in a way whose columns can't be determined", {
+  data <- data.frame(record_id = c("1", "1", "2", "2"), redcap_event_name = c("a_arm_1", "b_arm_1", "a_arm_1", "b_arm_1"),
+                     age = c(40, NA, 50, NA), x = c(NA, 5, NA, 6))
+  dic <- data.frame(field_name = c("record_id", "age", "x"), form_name = c("fa", "fa", "fb"), field_type = "text", field_label = c("ID", "Age", "X"))
+  ef <- data.frame(arm_num = 1, unique_event_name = c("a_arm_1", "a_arm_1", "b_arm_1"), form = c("fa", "base", "fb"))
+  run <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(data = data, dic = dic, event_form = ef, vars = "x", filter = filter)))
+  cols <- "age"
+  nm <- "data"
+
+  # `age` is only in the event a, and `x` only in b: the columns of these filters are known, so they stop because they
+  # don't share any event with x
+  for (filter in c("is.na((data)[, 'age'])", "is.na(((data))$age)", "is.na(data[, c(0, 3)])", "is.na(data[, j = 'age'])",
+                   "is.na(data[j = 'age', i = ])", "is.na(data[, cols])", "is.na(data[, -c(1, 2, 4)])",
+                   "is.na(data[, c(FALSE, FALSE, TRUE, FALSE)])", "is.na(data[['age', exact = TRUE]])", "is.na(data[, 'age', drop = TRUE])",
+                   "is.na(.env$data$age)", "is.na(.env[[nm]][, 'age'])", "is.na(data[, paste0('a', 'ge')])")) {
+    expect_error(run(filter), "do not overlap", class = "REDCapDM_error_argument", info = filter)
+  }
+
+  # Other uses of the data, and the functions that find objects by their name or evaluate code: their columns can't be
+  # known
+  for (filter in c("is.na(dplyr::pull(data, 'age'))", "is.na(dplyr::pull(data, age))", "is.na(data |> dplyr::pull(age))",
+                   "is.na(rev(data)[, 2])", "is.na(t(data)[3, ])", "is.na(with(data, age))", "is.na(subset(data, select = age)[[1]])",
+                   "is.na(data[, names(data) == 'age'])", "is.na(get('age'))", "is.na(get0('data')$age)", "is.na(dynGet('data')$age)",
+                   "is.na(eval(parse(text = 'age')))", "is.na(do.call('get', list('age')))", "is.na(sapply('age', get))",
+                   "is.na(sapply('age', 'get'))", "is.na(dplyr::pull(.env$data, 'age'))", "is.na(as.list(.env)$data$age)")) {
+    expect_error(run(filter), "can't be determined", class = "REDCapDM_error_argument", info = filter)
+  }
+
+  # A function of the session that reads a column: the result depends on a column that isn't in the filter
+  read_age <- function() get("age", envir = parent.frame())
+  expect_error(run("is.na(read_age())"), "can't be determined", class = "REDCapDM_error_argument")
+
+  # The filters with the columns of the events of x keep working
+  expect_equal(run("data[, 'x'] %in% 5")$data$x, c(NA, NA, NA, 6))
+  expect_equal(run("(data)$x > 5")$data$x, c(NA, 5, NA, NA))
+  expect_equal(run("data[, j = 'x'] > 5")$data$x, c(NA, 5, NA, NA))
+  expect_equal(run("sapply(x, function(data) isTRUE(data > 5))")$data$x, c(NA, 5, NA, NA))
+  over_one <- function(v) v > 1
+  expect_equal(run("over_one(x) %in% TRUE")$data$x, rep(NA_real_, 4))
+})
+
+test_that("rd_insert_na accepts drop without name, objects with the name of a function and filters with random numbers", {
+  data <- data.frame(record_id = c("1", "1", "2", "2"), redcap_event_name = c("a_arm_1", "b_arm_1", "a_arm_1", "b_arm_1"),
+                     age = c(40, NA, 50, NA), x = c(NA, 5, NA, 6))
+  dic <- data.frame(field_name = c("record_id", "age", "x"), form_name = c("fa", "fa", "fb"), field_type = "text", field_label = c("ID", "Age", "X"))
+  ef <- data.frame(arm_num = 1, unique_event_name = c("a_arm_1", "a_arm_1", "b_arm_1"), form = c("fa", "base", "fb"))
+  run <- function(filter) suppressWarnings(suppressMessages(rd_insert_na(data = data, dic = dic, event_form = ef, vars = "x", filter = filter)))
+
+  expect_equal(run("data[, 'x', FALSE] > 5")$data$x, c(NA, 5, NA, NA))
+  # (objects of the session called as some functions)
+  local <- 5
+  expect_equal(run("x > local")$data$x, c(NA, 5, NA, NA))
+  expect_error(run("is.na(local(age))"), "can't be determined", class = "REDCapDM_error_argument")
+
+  # A filter with random numbers is evaluated with the same numbers in the check of its columns, and the random numbers
+  # of the session continue as after a single evaluation
+  set.seed(10)
+  expect_equal(run("x > 5 & sample(c(TRUE, TRUE, FALSE), 4, replace = TRUE) | x > 5")$data$x, c(NA, 5, NA, NA))
+  after <- runif(1)
+  set.seed(10)
+  invisible(sample(c(TRUE, TRUE, FALSE), 4, replace = TRUE))
+  expect_identical(after, runif(1))
 })

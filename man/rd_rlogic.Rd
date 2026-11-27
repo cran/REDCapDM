@@ -24,31 +24,36 @@ rd_rlogic(
 
 \item{logic}{A single REDCap logic string (e.g., \code{"if([exc_1]='1' or [inc_1]='0', 1, 0)"}).}
 
-\item{var}{A single string specifying the target variable the logic applies to.}
+\item{var}{A single string specifying the target variable the logic applies to. When \code{event_form} is supplied, it must be a field of the dictionary; its form determines the target events.}
 }
 \value{
 A list with:
 \describe{
-\item{rlogic}{The translated R-compatible logic as a string.}
-\item{eval}{The evaluation of the translated logic on the provided dataset, filtered by event if applicable.}
+\item{rlogic}{The translated R expression. It can reference auxiliary columns or internal helpers used during translation; it is not necessarily reusable against the original dataset. Use \code{eval} or \code{eval_data} for the evaluated result.}
+\item{eval}{The evaluated values in input row order, with \code{NA} outside the target events and instrument rows. A constant expression can return a single value for a non-longitudinal dataset without repeating instruments; use \code{eval_data} for one value per input row.}
+\item{eval_data}{A \code{data.frame} with the record identifier, the event and repetition columns present in the dataset (\code{redcap_event_name}, \code{redcap_repeat_instrument}, \code{redcap_repeat_instance}) and \code{eval}, to identify the record of each evaluated value.}
 }
 }
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Converts a REDCap logic expression into R-compatible logic. Processes one logic expression (\code{logic}) for one target variable (\code{var}) at a time. Supports common REDCap operators (\code{and}, \code{or}, \code{=}, \code{<}, \code{>}, etc.) and handles event-specific logic in longitudinal projects. Logic involving smart variables or repeated instruments may require manual review.
+Converts a REDCap logic expression into R-compatible logic. Processes one logic expression (\code{logic}) for one target variable (\code{var}) at a time. Supports common REDCap operators (\code{and}, \code{or}, \code{=}, \code{<}, \code{>}, etc.) and handles event-specific logic in longitudinal projects and repeated instruments. Logic involving smart variables may require manual review.
 }
 \details{
 \itemize{
 \item Translates REDCap operators and functions into R equivalents:
 \itemize{
 \item \code{=} → \code{==}, \verb{<>} → \code{!=}, \code{and} → \code{&}, \code{or} → \code{|}.
-\item Converts functions like \verb{if()}, \code{rounddown()}, \code{datediff()}, \code{sum()} to R equivalents.
+\item Converts the functions \verb{if()}, \code{datediff()}, \code{round()}, \code{rounddown()}, \code{roundup()}, \code{sum()}, \code{mean()}, \code{median()}, \code{min()}, \code{max()}, \code{mod()}, \code{exponential()}, \code{isnumber()}, \code{isblankormissingcode()}, \code{contains()}, \code{not_contain()}, \code{starts_with()}, \code{ends_with()}, \code{left()}, \code{right()}, \code{mid()}, \code{find()}, \code{replace_text()}, \code{concat()}, \code{concat_ws()}, \code{upper()}, \code{lower()}, \code{trim()}, \code{length()}, \code{stdev()}, \code{isinteger()}, \code{year()}, \code{month()} and \code{day()} to R equivalents.
+\item As in REDCap, \code{sum()}, \code{mean()}, \code{median()}, \code{min()} and \code{max()} are computed for each row and ignore blank values.
 }
 \item Handles date transformations and empty strings (\code{''}) → \code{NA}.
 \item Adjusts logic for longitudinal data using \code{event_form} if provided.
 \item Evaluates the translated R logic against the dataset and returns the results.
-\item Logic with repeated instruments, smart variables, or multiple events per variable may require manual inspection.
+\item With repeated instruments and repeating events, the logic is evaluated in the rows where \code{var} is collected. As in REDCap, in a repeating instrument the variables of the other forms take the value of the base row of the same record and event. A variable of another repeating instrument or repeating event can be used with its instance (\verb{[event][field][current-instance]}, the instance of the same number). Without it, the logic can't be translated when the instance to use isn't known: \verb{[field]} of another instrument that repeats in the events of \code{var}, or \verb{[event][field]} when its form repeats in that event or the event repeats. \verb{[event][field]} of a form collected once in that event is valid, although the form repeats in other events.
+\item As in REDCap, \code{datediff()} returns the absolute difference unless its last argument is \code{true}, its units are \code{"y"} (years of 365.2425 days), \code{"M"} (months of 30.44 days), \code{"d"}, \code{"h"}, \code{"m"} (minutes) and \code{"s"}, \code{"today"} is the current date and \code{"now"} the current date and time. With two time fields (e.g. \code{HH:MM}), it is the difference between the two times of the same day, and its date format (e.g. \code{'hhmm'}) is not used.
+\item The same variable can be used in several events (e.g. \verb{[visit_2_arm_1][weight] - [visit_1_arm_1][weight]}).
+\item Logic with smart variables or other REDCap functions may require manual inspection.
 }
 }
 \examples{
@@ -60,3 +65,16 @@ covican |>
   )
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

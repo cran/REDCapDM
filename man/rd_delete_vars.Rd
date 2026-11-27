@@ -10,7 +10,8 @@ rd_delete_vars(
   dic = NULL,
   event_form = NULL,
   vars = NULL,
-  pattern = NULL
+  pattern = NULL,
+  forms = NULL
 )
 }
 \arguments{
@@ -25,27 +26,30 @@ rd_delete_vars(
 \item{vars}{Optional. A character vector of variable names to remove from both the dataset and dictionary.}
 
 \item{pattern}{Optional. A character vector of regular expression patterns. Variables matching these patterns will be removed from the dataset and dictionary.}
+
+\item{forms}{Optional. A character vector of form names (as in the \code{form_name} column of the dictionary). All the variables of these forms will be removed from the dataset and dictionary.}
 }
 \value{
 A list containing:
 \describe{
 \item{data}{The updated dataset with specified variables removed.}
 \item{dictionary}{The updated REDCap dictionary.}
-\item{event_form}{The original event-form mapping (if applicable).}
+\item{event_form}{The event-form mapping (if applicable), without the removed forms.}
 \item{results}{A summary message describing the variable removal operation.}
 }
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Deletes selected variables from a REDCap dataset and its dictionary, keeping them consistent and preserving variable labels.
 }
 \details{
 \itemize{
-\item Ensure that at least one of \code{vars} or \code{pattern} is specified.
+\item Ensure that at least one of \code{vars}, \code{pattern} or \code{forms} is specified.
 \item Removes specified variables and their factor versions (e.g., \code{variable.factor}) from the dataset.
 \item Removes matching variables from the dictionary.
 \item Warns about factor versions of variables matching patterns, recommending use of \code{rd_factor()} if necessary.
+\item With \code{forms}, every variable of the form is removed: its factor versions, checkbox options, recalculated versions (\verb{_recalc}) and the form's \verb{_complete} and \verb{_timestamp} fields. The record identifier is always kept. The forms are also removed from \code{event_form}, and so are the rows of the repeating instruments among them.
 }
 }
 \examples{
@@ -55,11 +59,30 @@ result <- rd_delete_vars(
   vars = c("potassium", "leuk_lymph")
 )
 
-# Delete variables matching patterns
+# Delete variables matching patterns (here, the inclusion and exclusion criteria)
 result <- rd_delete_vars(
   data = covican$data,
   dic = covican$dictionary,
-  pattern = c("_complete$", "_other$")
+  pattern = c("^inc_", "^exc_")
+)
+
+# Delete every variable of a form
+result <- rd_delete_vars(
+  project = covican,
+  forms = "laboratory_findings"
 )
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}},
+\code{\link[=rd_transform]{rd_transform()}}
+}
+\concept{process functions}

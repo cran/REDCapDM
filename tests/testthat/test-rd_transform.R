@@ -7,19 +7,19 @@ test_that("function stops if data or dic is missing", {
 
 test_that("final_format argument validation works", {
   expect_error(rd_transform(data = covican$data, dic = covican$dictionary, final_format = "invalid"),
-               "final_format argument has to be one of")
+               "`final_format` has to be one of", class = "REDCapDM_error_argument")
 })
 
 test_that("which_event and which_form validation works", {
   expect_error(rd_transform(data = covican$data, dic = covican$dictionary, which_event = "baseline_visit_arm_1"),
-               "Which event has been specified but the final format is not to split the data by event")
+               "`which_event` has been specified, but the final format doesn't split the data by event")
   expect_error(rd_transform(data = covican$data, dic = covican$dictionary, which_form = unique(covican$dictionary$form_name)[1]),
-               "Which form has been specified but the final format is not to split the data by form")
+               "`which_form` has been specified, but the final format doesn't split the data by form")
 })
 
 test_that("wide argument validation works", {
   expect_error(rd_transform(data = covican$data, dic = covican$dictionary, wide = TRUE),
-               "The argument wide has been specified but the final format is not to split the data by form")
+               "`wide` has been specified, but the final format doesn't split the data by form")
 })
 
 test_that("deleting variables works", {
@@ -169,4 +169,86 @@ test_that("function handles repeated instruments", {
     suppressMessages() |>
     suppressWarnings()
   expect_true(is.list(res))
+})
+
+
+
+# ---- Identifier with another name ----
+
+test_that("rd_transform works when the identifier is not called record_id", {
+  sid <- covican
+  names(sid$data)[1] <- "study_id"
+  sid$dictionary$field_name[1] <- "study_id"
+
+  res <- suppressWarnings(rd_transform(sid))
+  ref <- suppressWarnings(rd_transform(covican))
+
+  expect_equal(res$data$study_id, ref$data$record_id)
+  expect_equal(nrow(res$data), nrow(ref$data))
+})
+
+
+test_that("rd_transform recalculates and translates the dictionary with repeated instruments", {
+  fx <- make_repeat_classic()
+  fx$data$ae_double <- c(NA, 2, 4, NA, 6)
+  fx$dictionary <- rbind(fx$dictionary, data.frame(
+    field_name = "ae_double", form_name = "ae", field_type = "calc", field_label = "Double grade",
+    choices_calculations_or_slider_labels = "[ae_grade]*2", text_validation_type_or_show_slider_number = NA,
+    branching_logic_show_field_only_if = "[age] > '40'", stringsAsFactors = FALSE
+  ))
+
+  res <- suppressWarnings(suppressMessages(rd_transform(fx)))
+  report <- paste(res$results, collapse = "\n")
+
+  expect_match(report, "Recalculating calculated fields")
+  expect_match(report, "\\|\\s+ae_double\\s+\\|\\s+Yes\\s+\\|\\s+TRUE\\s+\\|")
+  expect_match(report, "Converting every branching logic")
+  expect_equal(res$dictionary$branching_logic_show_field_only_if[res$dictionary$field_name == "ae_double"], "data$age > 40")
+})
+
+
+test_that("rd_transform asks to remove the status fields before splitting by form", {
+  expect_error(
+    rd_transform(data = cbind(covican$data, demographics_complete = 2), dic = covican$dictionary, event_form = covican$event_form, final_format = "by_form"),
+    "delete_pattern = \"_complete\""
+  )
+})
+
+test_that("rd_transform accepts wide = FALSE with any final format", {
+  expect_no_error(suppressWarnings(suppressMessages(rd_transform(covican, wide = FALSE))))
+})
+
+test_that("rd_transform keeps the identifier when its form is not in any event", {
+  for (id in c("record_id", "subject_id")) {
+    dic <- data.frame(
+      field_name = c(id, "age"), form_name = c("record_form", "clinical"), field_type = "text",
+      field_label = c("ID", "Age"), choices_calculations_or_slider_labels = "",
+      text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = "",
+      stringsAsFactors = FALSE
+    )
+    data <- data.frame(id = c(1, 2), redcap_event_name = "v1_arm_1", age = c(30, 40))
+    names(data)[1] <- id
+    event_form <- data.frame(arm_num = 1, unique_event_name = "v1_arm_1", form = "clinical")
+
+    res <- suppressMessages(suppressWarnings(rd_transform(data = data, dic = dic, event_form = event_form)))
+    expect_equal(names(res$data), c(id, "redcap_event_name", "age"))
+    expect_equal(res$dictionary$field_name, c(id, "age"))
+    expect_equal(res$data[[id]], c(1, 2), ignore_attr = TRUE)
+
+    by_event <- suppressMessages(suppressWarnings(rd_transform(data = data, dic = dic, event_form = event_form, final_format = "by_event")))
+    expect_true(id %in% names(by_event$data$df[[1]]))
+  }
+})
+
+test_that("rd_transform explains a wrong checkbox_labels", {
+  for (wrong in list(data.frame(), function(x) x, "No", c("a", "b", "c"))) {
+    expect_error(rd_transform(covican, checkbox_labels = wrong), "must have two labels", class = "REDCapDM_error")
+  }
+})
+
+test_that("rd_transform describes the labels of the checkboxes that it uses", {
+  res <- suppressMessages(suppressWarnings(rd_transform(covican, checkbox_labels = c("Absent", "Present"))))
+  report <- paste(res$results, collapse = "\n")
+  expect_match(report, "changing their values to Absent/Present and changing their names", fixed = TRUE)
+  expect_false(grepl("No/Yes", report, fixed = TRUE))
 })

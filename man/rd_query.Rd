@@ -11,7 +11,7 @@ rd_query(
   negate = FALSE,
   event = NA,
   filter = NA,
-  addTo = NA,
+  add_to = NA,
   variables_names = NA,
   query_name = NA,
   instrument = NA,
@@ -21,7 +21,8 @@ rd_query(
   link = list(),
   data = NULL,
   dic = NULL,
-  event_form = NULL
+  event_form = NULL,
+  addTo = deprecated()
 )
 }
 \arguments{
@@ -29,15 +30,15 @@ rd_query(
 
 \item{variables}{Character vector of variable names to check for queries.}
 
-\item{expression}{Character vector of R expressions to evaluate for each variable.}
+\item{expression}{Character vector of R conditions, written as text, to evaluate for each variable, where \code{x} stands for the variable (e.g. \code{"is.na(x)"} or \code{"x > 100"}). Several conditions separated by commas must all be met. Besides the columns of the data, they can use objects created in your session or in your function.}
 
-\item{negate}{Logical, if \code{TRUE}, identifies values that \strong{do not} meet the condition. Default is \code{FALSE}.}
+\item{negate}{Logical, if \code{TRUE}, identifies values that \strong{do not} meet the condition, including the missing values (for which the condition can't be checked). Default is \code{FALSE}.}
 
-\item{event}{Required for longitudinal projects to avoid overestimation. REDCap event(s) to analyze.}
+\item{event}{REDCap event(s) to analyze in longitudinal projects. If it isn't given, the events where the form of each variable is collected are taken from \code{event_form}; without \code{event_form}, all the events are analyzed (with a warning), which can overestimate the number of queries.}
 
-\item{filter}{Optional string of filters to apply to the dataset, such as the branching logic of a variable.}
+\item{filter}{Optional filter of the rows to check, written as text (e.g. \code{"age > 18"}), such as the branching logic of a variable translated by \code{rd_dictionary()}. Give one filter, or one per variable. Several conditions separated by commas must all be met, and the filter can use objects created in your session or in your function.}
 
-\item{addTo}{Optional data frame from a previous query report to which the new results can be appended.}
+\item{add_to}{Optional output of a previous \code{rd_query()} or \code{rd_event()} to which the new queries are appended. Its queries must be a data frame: the output of \code{by_dag = TRUE}, whose queries are a list of data frames, can't be used.}
 
 \item{variables_names}{Optional character vector of descriptions for each variable. Defaults to the variables labels in the dictionary.}
 
@@ -58,12 +59,14 @@ rd_query(
 \item{dic}{A \code{data.frame} with the REDCap dictionary.}
 
 \item{event_form}{Only applicable for longitudinal projects (presence of events). Event-to-form mapping for longitudinal projects.}
+
+\item{addTo}{\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#deprecated}{\figure{lifecycle-deprecated.svg}{options: alt='[Deprecated]'}}}{\strong{[Deprecated]}} Use \code{add_to} instead.}
 }
 \value{
-A list containing:
+A list of class \code{REDCapDM_report}, which prints a short summary (see \code{\link[=print.REDCapDM_report]{print.REDCapDM_report()}}), containing:
 \describe{
-\item{queries}{A data frame or a list of data frames (if \code{by_dag = TRUE}) with detailed query information for each record.}
-\item{results}{A formatted report (HTML table) summarizing total queries per variable, event, and DAG if applicable.}
+\item{queries}{A data frame or a list of data frames (if \code{by_dag = TRUE}, one per DAG) with detailed query information for each record.}
+\item{results}{A formatted report (HTML table) summarizing total queries per variable and event; with \code{by_dag = TRUE}, a list with one table per DAG.}
 }
 }
 \description{
@@ -80,15 +83,17 @@ The function performs the following steps:
 \item Applies additional user-specified filters before identifying queries.
 \item Generates structured query results with metadata including:
 \itemize{
-\item Identifier (record_id)
+\item Identifier: the record identifier, \code{record_id} or else the first field of the dictionary (e.g. \code{subject_id}), whatever its position in the data. Filters and expressions can use it by its name.
 \item DAG (if present)
-\item Event and Instrument
+\item Event (the unique event name, e.g. \code{baseline_arm_1}), EventLabel (its label, e.g. \verb{Baseline (Arm 1: Drug A)}) and Instrument
 \item Field, Repetition, Description, Query statement
 \item Optional link to REDCap entry
 }
-\item Optionally combines results with previous query outputs using \code{addTo}.
+\item Optionally combines results with previous query outputs using \code{add_to}. The event of a query is its unique event
+name: a label can be renamed in REDCap or be the same in several arms. The previous queries take the current label
+of their events.
 \item Produces a summarized report, optionally including variables with zero queries.
-\item Provides warnings for variables with branching logic that could not be automatically evaluated.
+\item If branching logic cannot be translated by \code{\link[=rd_rlogic]{rd_rlogic()}}, the function warns and checks the variable without applying that branching logic. Review these queries manually or provide an appropriate \code{filter}.
 }
 }
 \examples{
@@ -118,3 +123,10 @@ result <- rd_query(covican,
 }
 
 }
+\seealso{
+Other query functions:
+\code{\link[=check_queries]{check_queries()}},
+\code{\link[=rd_event]{rd_event()}},
+\code{\link[=rd_export]{rd_export()}}
+}
+\concept{query functions}

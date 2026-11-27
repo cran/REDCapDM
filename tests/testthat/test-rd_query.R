@@ -71,7 +71,8 @@ test_that("rd_query complains about incomplete link when events present", {
   link_incomplete <- list(domain = "example.com", redcap_version = "10.0", proj_id = 1)
   expect_error(
     rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "is.na(x)", link = link_incomplete) |> suppressWarnings(),
-    regexp = "Incomplete 'link' argument"
+    regexp = "Incomplete `link` argument",
+    class = "REDCapDM_error_argument"
   )
 })
 
@@ -114,8 +115,13 @@ test_that("rd_query repeats a single expression for multiple variables (warning 
   )
   toy_dic <- make_toy_dic(list(v1 = list(field_label = "V1", form_name = "f1"),
                                v2 = list(field_label = "V2", form_name = "f1")))
+  # One expression for several variables is the usual way: no warning
+  expect_no_warning(
+    res <- rd_query(data = toy_data, dic = toy_dic, variables = c("v1", "v2"), expression = "is.na(x)")
+  )
+  # Several expressions that don't match the variables: warning
   expect_warning(
-    res <- rd_query(data = toy_data, dic = toy_dic, variables = c("v1", "v2"), expression = "is.na(x)"),
+    rd_query(data = toy_data, dic = toy_dic, variables = c("v1", "v2", "v1"), expression = c("is.na(x)", "x > 1")),
     regexp = "The first expression will be applied to all variables."
   )
   # Both fields should produce queries (identifiers present for the NA rows)
@@ -152,14 +158,14 @@ test_that("rd_query errors when number of filters differs from number of variabl
   )
 })
 
-test_that("rd_query merges with addTo queries when provided", {
+test_that("rd_query merges with add_to queries when provided", {
   toy_data <- data.frame(record_id = as.character(1:4), age = c(16, 21, NA, 30), height = c(160, NA, 170, 165), stringsAsFactors = FALSE)
   toy_dic <- make_toy_dic(list(age = list(field_label = "Age", form_name = "demo"),
                                height = list(field_label = "Height", form_name = "demo")))
   # First call: identify age missing
   res1 <- rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "is.na(x)")
   # Second call: height missing and merge previous
-  res2 <- rd_query(data = toy_data, dic = toy_dic, variables = "height", expression = "is.na(x)", addTo = res1)
+  res2 <- rd_query(data = toy_data, dic = toy_dic, variables = "height", expression = "is.na(x)", add_to = res1)
   # merged queries should contain identifiers for both variables
   expect_true(all(unique(res1$queries$Identifier) %in% res2$queries$Identifier))
   expect_true(all(unique(res2$queries$Identifier) %in% res2$queries$Identifier))
@@ -231,7 +237,7 @@ test_that("rd_query errors when variables_names length mismatches variables", {
     rd_query(data = toy_data, dic = toy_dic,
              variables = "a", expression = "x>0",
              variables_names = c("Custom1", "Custom2")),
-    regexp = "Multiple variables names"
+    regexp = "Multiple variable names"
   )
 })
 
@@ -337,11 +343,11 @@ test_that("rd_query filters correctly", {
   expect_equal(nrow(res$queries), 1)
 })
 
-test_that("rd_query can merge with addTo", {
+test_that("rd_query can merge with add_to", {
   toy_data <- data.frame(record_id = 1:3, age = c(NA, 20, 30))
   toy_dic <- make_toy_dic(list(age = list(field_label = "Age", form_name = "demo")))
   res1 <- rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "is.na(x)")
-  res2 <- rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "x > 25", addTo = res1)
+  res2 <- rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "x > 25", add_to = res1)
   expect_gt(nrow(res2$queries), nrow(res1$queries))
 })
 
@@ -607,7 +613,10 @@ test_that("rd_query handles multiple event_id on longitudinal dataset correctly"
   link <- list(domain = "redcap", redcap_version = "10", proj_id = 1,
                event_id = setNames(c(101, 102), c("e1","e2")))
 
-  res <- rd_query(data = df, dic = toy_dic, variables = "x", expression = "is.na(x)", link = link)
+  expect_warning(
+    res <- rd_query(data = df, dic = toy_dic, variables = "x", expression = "is.na(x)", link = link),
+    "No event or event-form has been specified"
+  )
   expect_true(all(c("Link","Event") %in% names(res$queries)))
 })
 
@@ -663,20 +672,806 @@ test_that("rd_query errors when query_name length mismatches variables", {
   )
 })
 
-test_that("rd_query addTo preserves Link column when present in addTo$queries", {
+test_that("rd_query add_to preserves Link column when present in add_to$queries", {
   data <- data.frame(record_id = 1:2, x = c(1, 2), redcap_event_name = c("ev1","ev1"), stringsAsFactors = FALSE)
   dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "f1")))
 
   # produce a first run with one query
   base <- rd_query(variables = "x", expression = "x>1", data = data, dic = dic, event = "ev1")
 
-  addTo <- list(queries = as.data.frame(base$queries))
+  add_to <- list(queries = as.data.frame(base$queries))
   # add a Link column to mimic an earlier export
-  addTo$queries$Link <- "http://example.com/1"
+  add_to$queries$Link <- "http://example.com/1"
 
-  # call rd_query with addTo; should not error and resulting queries should include a Link column
-  out <- rd_query(variables = "x", expression = "x>0", data = data, dic = dic, event = "ev1", addTo = addTo)
+  # call rd_query with add_to; should not error and resulting queries should include a Link column
+  out <- rd_query(variables = "x", expression = "x>0", data = data, dic = dic, event = "ev1", add_to = add_to)
   expect_true(is.list(out))
   expect_true("queries" %in% names(out))
   expect_true("Link" %in% names(out$queries))
+})
+
+# ---- Repeated instruments and repeating events ----
+
+test_that("rd_query ignores rows of other instruments for a non-repeating variable", {
+  fx <- make_repeat_classic()
+  res <- suppressMessages(rd_query(data = fx$data, dic = fx$dictionary, variables = "age", expression = "is.na(x)"))
+
+  expect_equal(nrow(res$queries), 1)
+  expect_equal(as.character(res$queries$Identifier), "2")
+  expect_equal(res$queries$Repetition, "-")
+})
+
+test_that("rd_query only checks the instances of a repeating instrument variable", {
+  fx <- make_repeat_classic()
+  res <- suppressMessages(rd_query(data = fx$data, dic = fx$dictionary, variables = "ae_term", expression = "is.na(x)"))
+
+  expect_equal(nrow(res$queries), 1)
+  expect_equal(as.character(res$queries$Identifier), "1")
+  expect_equal(res$queries$Repetition, "ae-2")
+})
+
+test_that("rd_query handles forms repeating in only some events and repeating events", {
+  fx <- make_repeat_longitudinal()
+
+  hb <- suppressWarnings(suppressMessages(rd_query(fx, variables = "hb", expression = "is.na(x)")))
+  expect_equal(nrow(hb$queries), 1)
+  expect_equal(hb$queries$Repetition, "labs-2")
+
+  fu <- suppressWarnings(suppressMessages(rd_query(fx, variables = "fu_status", expression = "is.na(x)")))
+  expect_equal(nrow(fu$queries), 1)
+  expect_equal(fu$queries$Repetition, "2")
+})
+
+test_that("rd_query links open the instance of the query", {
+  fx <- make_repeat_classic()
+  res <- suppressMessages(rd_query(
+    data = fx$data, dic = fx$dictionary, variables = "ae_term", expression = "is.na(x)",
+    link = list(domain = "redcap.example.org", redcap_version = "14.0.0", proj_id = 1)
+  ))
+
+  expect_match(res$queries$Link, "&page=ae&id=1&instance=2$")
+})
+
+test_that("rd_query keeps the same output when there are no repetitions", {
+  toy_data <- data.frame(record_id = 1:3, age = c(NA, 20, NA))
+  toy_dic <- make_toy_dic(list(age = list(field_label = "Age", form_name = "demo")))
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "age", expression = "is.na(x)"))
+
+  expect_equal(res$queries$Identifier, c(1, 3))
+  expect_equal(res$queries$Repetition, c("-", "-"))
+  expect_equal(res$queries$Code, c("1-1", "3-1"))
+})
+
+# ---- Other fixes ----
+
+test_that("rd_query works with report_zeros = TRUE when every variable has queries", {
+  toy_data <- data.frame(record_id = 1:3, x = c(NA, 1, 2))
+  toy_dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "demo")))
+
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "x", expression = "is.na(x)", report_zeros = TRUE))
+  expect_equal(nrow(res$queries), 1)
+})
+
+test_that("rd_query keeps alphanumeric identifiers and sorts them naturally", {
+  toy_data <- data.frame(record_id = c("ABC10", "ABC2", "SITE-1"), x = NA)
+  toy_dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "demo")))
+
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "x", expression = "is.na(x)"))
+  expect_equal(res$queries$Identifier, c("ABC2", "ABC10", "SITE-1"))
+  expect_equal(res$queries$Code, c("ABC2-1", "ABC10-1", "SITE-1-1"))
+})
+
+test_that("rd_query sorts center-id identifiers naturally", {
+  toy_data <- data.frame(record_id = c("100-10", "100-2", "20-1"), x = NA)
+  toy_dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "demo")))
+
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "x", expression = "is.na(x)"))
+  expect_equal(res$queries$Identifier, c("20-1", "100-2", "100-10"))
+})
+
+test_that("rd_query multiple-events warning has no stray text", {
+  toy_data <- data.frame(record_id = 1:2, redcap_event_name = c("e1", "e2"), x = c(NA, 1))
+  toy_dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "demo")))
+
+  expect_warning(
+    rd_query(data = toy_data, dic = toy_dic, variables = "x", expression = "is.na(x)", event = c("e1", "e2")),
+    "avoid overestimation\\.$"
+  )
+})
+
+# ---- Branching logic after rd_factor() ----
+
+test_that("rd_query applies the branching logic the same way before and after rd_factor()", {
+  fac <- suppressWarnings(rd_factor(covican))
+
+  for (v in c("type_dm", "acute_leuk", "potassium")) {
+    before <- suppressWarnings(rd_query(covican, variables = v, expression = "is.na(x)"))
+    expect_message(
+      after <- rd_query(fac, variables = v, expression = "is.na(x)"),
+      "applied automatically"
+    )
+    expect_equal(after$queries, before$queries)
+  }
+
+  # type_dm is only asked to patients with diabetes: 5 queries, not one per patient without it
+  expect_equal(nrow(suppressWarnings(rd_query(fac, variables = "type_dm", expression = "is.na(x)"))$queries), 5)
+})
+
+test_that("rd_query keeps working with the branching logic translated by rd_dictionary() after rd_factor()", {
+  dic_fac <- suppressWarnings(rd_dictionary(suppressWarnings(rd_factor(covican))))
+
+  res <- suppressWarnings(rd_query(dic_fac, variables = "type_dm", expression = "is.na(x)"))
+  expect_equal(nrow(res$queries), 5)
+})
+
+
+test_that("rd_query applies branching logic that uses variables of the base row in a repeating instrument", {
+  fx <- make_repeat_classic()
+  fx$dictionary$branching_logic_show_field_only_if[fx$dictionary$field_name == "ae_term"] <- "[age] > '40'"
+
+  res <- suppressWarnings(suppressMessages(rd_query(fx, variables = "ae_term", expression = "is.na(x)")))
+
+  # only record 1 (50 years old) has to fill ae_term; its second instance is empty
+  expect_equal(nrow(res$queries), 1)
+  expect_equal(as.character(res$queries$Identifier), "1")
+  expect_equal(res$queries$Repetition, "ae-2")
+})
+
+
+test_that("rd_query checks each variable only in the events of its form when several variables are checked at once", {
+  together <- suppressWarnings(rd_query(covican, variables = c("copd", "potassium"), expression = "is.na(x)"))
+  copd <- suppressWarnings(rd_query(covican, variables = "copd", expression = "is.na(x)"))
+  potassium <- suppressWarnings(rd_query(covican, variables = "potassium", expression = "is.na(x)"))
+
+  expect_equal(nrow(together$queries), nrow(copd$queries) + nrow(potassium$queries))
+  # copd is only collected at baseline
+  expect_equal(unique(together$queries$Event[together$queries$Field == "copd"]), "baseline_visit_arm_1")
+  expect_equal(unique(together$queries$EventLabel[together$queries$Field == "copd"]), "Baseline visit")
+})
+
+
+test_that("rd_query applies branching logic that uses a variable of another event", {
+  fx <- make_cross_event()
+
+  # Checked alone, the follow-up rows don't contain `sex`: the logic is evaluated in the complete dataset
+  res <- suppressWarnings(rd_query(fx, variables = "preg", expression = "is.na(x)"))
+
+  expect_equal(nrow(res$queries), 1)
+  expect_equal(as.character(res$queries$Identifier), "2")
+  expect_equal(as.character(res$queries$Repetition), "2")
+})
+
+test_that("rd_query reports no query when no row meets the branching logic", {
+  fx <- make_cross_event()
+  fx$data$sex <- ifelse(fx$data$sex %in% 2, 1, fx$data$sex)
+
+  # There are no women: `preg` is never shown
+  res <- suppressWarnings(rd_query(fx, variables = "preg", expression = "is.na(x)"))
+  expect_equal(nrow(res$queries), 0)
+})
+
+test_that("rd_query explains the mistakes in its arguments", {
+  fx <- make_repeat_classic()
+
+  expect_error(rd_query(fx, variables = "age"), "Specify the condition that defines a query")
+  expect_error(rd_query(fx, expression = "is.na(x)"), "Specify the variable")
+  expect_error(rd_query(fx, variables = "age", expression = "x >> 3"), "The expression `x >> 3` could not be evaluated for the variable `age`")
+  expect_error(rd_query(fx, variables = "age", expression = "x > lim"), "could not be evaluated")
+  expect_error(rd_query(fx, variables = "age", expression = "is.na(x)", negate = "yes"), "`negate` must be TRUE or FALSE")
+  expect_error(rd_query(fx, variables = "age", expression = "is.na(x)", add_to = data.frame(a = 1)), "`add_to` must be the output")
+  expect_error(rd_query(fx, variables = c("age", "agee"), expression = "is.na(x)"), "agee")
+  expect_error(rd_query(fx$data, variables = "age", expression = "is.na(x)", dic = fx$dictionary), "not a data frame")
+})
+
+test_that("rd_query suggests the options of a checkbox and warns about text compared with numbers", {
+  fx <- make_repeat_classic()
+  fx$data$symp___1 <- c(1, NA, NA, 0, NA)
+  fx$dictionary <- rbind(fx$dictionary, data.frame(field_name = "symp", form_name = "demo", field_type = "checkbox", field_label = "Symptoms",
+                                                   choices_calculations_or_slider_labels = "1, Fever", text_validation_type_or_show_slider_number = NA,
+                                                   branching_logic_show_field_only_if = ""))
+
+  expect_error(rd_query(fx, variables = "symp", expression = "is.na(x)"), "symp___1")
+  expect_warning(rd_query(fx, variables = "ae_term", expression = "x > 3"), "is text")
+})
+
+test_that("rd_query reports variables without queries in longitudinal projects with several DAGs", {
+  toy_data <- data.frame(
+    record_id = c("1", "1", "2", "2", "3"),
+    redcap_event_name = c("e1_arm_1", "e2_arm_1", "e1_arm_1", "e2_arm_1", "e1_arm_1"),
+    redcap_data_access_group = c("a", "a", "b", "b", "c"),
+    x = c(1, 2, 3, 4, 5),
+    y = c(1, NA, 3, 4, 5),
+    stringsAsFactors = FALSE
+  )
+  toy_dic <- make_toy_dic(list(x = list(field_label = "X", form_name = "f1"), y = list(field_label = "Y", form_name = "f1")))
+  toy_event <- data.frame(arm_num = 1, unique_event_name = c("e1_arm_1", "e2_arm_1"), form = "f1")
+
+  # A variable without queries: one row for each DAG and event of the data
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, event_form = toy_event, variables = "x", expression = "is.na(x)"))
+  expect_equal(nrow(res$queries), 0)
+
+  # Variables with and without queries
+  res <- suppressWarnings(rd_query(data = toy_data, dic = toy_dic, event_form = toy_event, variables = c("x", "y"), expression = "is.na(x)", report_zeros = TRUE))
+  expect_equal(nrow(res$queries), 1)
+  expect_equal(as.character(res$queries$Identifier), "1")
+})
+
+test_that("rd_query applies the branching logic of a checkbox field to its options", {
+  toy_data <- data.frame(record_id = as.character(1:4), sex = c(1, 2, 2, 1), preg___1 = c(0, 0, 1, 0), preg___2 = c(0, 1, 0, 0))
+  toy_dic <- data.frame(
+    field_name = c("record_id", "sex", "preg"), form_name = "f1", field_type = c("text", "radio", "checkbox"),
+    field_label = c("ID", "Sex", "Pregnancy"), choices_calculations_or_slider_labels = c("", "1, Man | 2, Woman", "1, First | 2, Second"),
+    text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = c("", "", "[sex] = '2'"),
+    stringsAsFactors = FALSE
+  )
+
+  res <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "preg___1", expression = "x == 0"))
+  expect_equal(as.character(res$queries$Identifier), "2")
+})
+
+test_that("rd_query applies the branching logic of other events and of fields never shown after rd_transform", {
+  fx <- make_cross_event()
+  fx$data$sex.factor <- factor(fx$data$sex, levels = 1:2, labels = c("Man", "Woman"))
+  fx$data$preg.factor <- factor(fx$data$preg, levels = c(1, 0), labels = c("Yes", "No"))
+
+  before <- suppressMessages(rd_query(fx, variables = "preg", expression = "is.na(x)"))
+  after <- suppressWarnings(suppressMessages(rd_query(rd_transform(fx), variables = "preg", expression = "is.na(x)")))
+  expect_equal(nrow(after$queries), nrow(before$queries))
+  expect_equal(nrow(after$queries), 1)
+
+  # A field whose (R) logic is never met in the data is not checked
+  fx$dictionary$branching_logic_show_field_only_if[3] <- "[sex] = '2'"
+  after <- suppressWarnings(suppressMessages(rd_query(rd_transform(fx), variables = "preg", expression = "is.na(x)")))
+  expect_equal(nrow(after$queries), 0)
+})
+
+test_that("rd_query shows a real option of the checkbox when the checkbox field is given", {
+  toy_data <- data.frame(record_id = as.character(1:2), cb___a = c(1, 0), cb___b = c(0, 1))
+  toy_dic <- data.frame(field_name = c("record_id", "cb"), form_name = "f1", field_type = c("text", "checkbox"), field_label = c("ID", "CB"),
+                        choices_calculations_or_slider_labels = c("", "A, a | B, b"), stringsAsFactors = FALSE)
+  expect_error(rd_query(data = toy_data, dic = toy_dic, variables = "cb", expression = "x == 1"), "cb___a")
+})
+
+test_that("rd_query keeps the < and > of the labels and removes their HTML", {
+  cov <- covican
+  i <- match(c("age", "potassium"), cov$dictionary$field_name)
+  cov$dictionary$field_label[i] <- c("Age (<18 or >90 years: check)", "<b>Potassium</b> &amp; <i>K+</i>")
+  out <- rd_query(cov, variables = c("age", "potassium"), expression = c("x > 80", "x > 4"), event = "baseline_visit_arm_1")
+
+  expect_setequal(unique(out$queries$Description), c("Age (<18 or >90 years: check)", "Potassium & K+"))
+  expect_match(out$results, "Age (&lt;18 or &gt;90 years: check)", fixed = TRUE)
+  expect_false(grepl("&amp;amp;", out$results, fixed = TRUE))
+})
+
+test_that("rd_query, rd_event and check_queries keep the leading zeros of the record identifiers", {
+  cov <- covican
+  cov$data$record_id <- sprintf("%03d", match(cov$data$record_id, unique(cov$data$record_id)))
+  q <- suppressMessages(rd_query(cov, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+  expect_type(q$queries$Identifier, "character")
+  expect_true(all(grepl("^[0-9]{3}$", q$queries$Identifier)))
+  expect_true(all(startsWith(q$queries$Code, paste0(q$queries$Identifier, "-"))))
+  expect_true(all(grepl("^[0-9]{3}$", suppressMessages(rd_event(cov, event = "follow_up_visit_da_arm_1"))$queries$Identifier)))
+  expect_true(all(grepl("^[0-9]{3}$", suppressMessages(check_queries(q$queries, q$queries))$queries$Identifier)))
+
+  # Plain numbers are still numbers
+  cov$data$record_id <- as.character(match(cov$data$record_id, unique(cov$data$record_id)))
+  expect_type(suppressMessages(rd_query(cov, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))$queries$Identifier, "double")
+})
+
+test_that("round record identifiers (e.g. 100000) keep their digits in the codes, the order and the links", {
+  cov <- covican
+  ids <- unique(cov$data$record_id)
+  cov$data$record_id <- c("100000", "200000", "1000000", "123456", "300000")[(match(cov$data$record_id, ids) - 1) %% 5 + 1]
+  cov$data <- cov$data[!duplicated(cov$data[c("record_id", "redcap_event_name")]), ]
+  link <- list(domain = "redcap.example", redcap_version = "14", proj_id = 1, event_id = c(baseline_visit_arm_1 = 1))
+  q <- suppressWarnings(suppressMessages(rd_query(cov, variables = "age", expression = "x > 0", event = "baseline_visit_arm_1", link = link)))
+  codes <- c("100000-1", "123456-1", "200000-1", "300000-1", "1000000-1")
+  expect_equal(q$queries$Identifier, c(100000, 123456, 200000, 300000, 1000000))
+  expect_equal(q$queries$Code, codes)
+  expect_false(any(grepl("e+", q$queries$Link, fixed = TRUE)))
+  cq <- suppressMessages(check_queries(q$queries, q$queries))
+  expect_equal(cq$queries$Code, codes)
+  expect_true(all(cq$queries$Modification == "Pending"))
+  # Record identifiers read as numbers (e.g. from the API) give the same codes and links
+  cov$data$record_id <- as.numeric(cov$data$record_id)
+  qn <- suppressWarnings(suppressMessages(rd_query(cov, variables = "age", expression = "x > 0", event = "baseline_visit_arm_1", link = link)))
+  expect_equal(qn$queries$Code, codes)
+  expect_equal(qn$queries$Link, q$queries$Link)
+  expect_true(all(grepl("^[0-9]+-1$", suppressMessages(rd_event(cov, event = "follow_up_visit_da_arm_1"))$queries$Code)))
+})
+
+test_that("the queries and the report describe <= and >= correctly", {
+  ge <- suppressMessages(rd_query(covican, variables = "age", expression = "x >= 80", event = "baseline_visit_arm_1"))
+  le <- suppressMessages(rd_query(covican, variables = "age", expression = "x <= 40", event = "baseline_visit_arm_1", negate = TRUE))
+  expect_gt(nrow(ge$queries), 0)
+  expect_gt(nrow(le$queries), 0)
+  expect_true(all(grepl("should not be greater than or equal to 80$", ge$queries$Query)))
+  expect_true(all(grepl("should be less than or equal to 40$", le$queries$Query)))
+  expect_match(ge$results, "should not be greater than or equal to 80", fixed = TRUE)
+  expect_false(any(grepl("than =", c(ge$queries$Query, le$queries$Query, ge$results, le$results), fixed = TRUE)))
+})
+
+test_that("all the reports of a project have the same type of Identifier, whichever records have queries", {
+  cov <- covican
+  # Identifiers with and without leading zeros: "007", "014", ..., "1330"
+  cov$data$record_id <- sprintf("%03d", match(cov$data$record_id, unique(cov$data$record_id)) * 7)
+  a <- suppressMessages(rd_query(cov, variables = "age", expression = "x > 80", event = "baseline_visit_arm_1"))
+  b <- suppressMessages(rd_query(cov, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+  # (the queries of `age` are only in records without leading zeros)
+  expect_false(any(startsWith(as.character(a$queries$Identifier), "0")))
+  expect_type(a$queries$Identifier, "character")
+  expect_type(b$queries$Identifier, "character")
+  expect_equal(nrow(dplyr::bind_rows(a$queries, b$queries)), nrow(a$queries) + nrow(b$queries))
+  expect_type(suppressMessages(rd_event(cov, event = "follow_up_visit_da_arm_1"))$queries$Identifier, "character")
+  expect_type(suppressMessages(check_queries(a$queries, a$queries))$queries$Identifier, "character")
+  # Plain numbers are still numbers in check_queries()
+  cov$data$record_id <- as.character(match(cov$data$record_id, unique(cov$data$record_id)))
+  n <- suppressMessages(rd_query(cov, variables = "age", expression = "x > 80", event = "baseline_visit_arm_1"))
+  expect_type(suppressMessages(check_queries(n$queries, n$queries))$queries$Identifier, "double")
+})
+
+test_that("rd_query ignores empty text arguments and explains data without columns", {
+  q0 <- suppressMessages(rd_query(covican, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+  q1 <- suppressMessages(rd_query(covican, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1", query_name = character(0), instrument = character(0)))
+  expect_equal(q1$queries, q0$queries)
+  expect_error(rd_query(data = data.frame(), dic = covican$dictionary, variables = "copd", expression = "is.na(x)"), class = "REDCapDM_error_argument")
+})
+
+test_that("rd_query ignores the elements of link given as NULL", {
+  cov <- covican
+  cov$data <- cov$data[cov$data$redcap_event_name == "baseline_visit_arm_1", setdiff(names(cov$data), c("redcap_event_name", "redcap_event_name.factor"))]
+  cov$event_form <- NULL
+  lk <- list(domain = "redcap.x.org", redcap_version = "14.0.0", proj_id = 3)
+  q1 <- suppressMessages(rd_query(cov, variables = "copd", expression = "is.na(x)", link = lk))
+  q2 <- suppressMessages(rd_query(cov, variables = "copd", expression = "is.na(x)", link = c(lk, list(event_id = NULL))))
+  expect_equal(q2$queries$Link, q1$queries$Link)
+  expect_true(all(grepl("^https://redcap.x.org/redcap_v14.0.0/DataEntry/index.php\\?pid=3&page=", q2$queries$Link)))
+})
+
+test_that("rd_query checks the events with data when an event of the variable has no records yet", {
+  cov <- covican
+  cov$data <- cov$data[cov$data$redcap_event_name == "baseline_visit_arm_1", ]
+  full <- suppressWarnings(suppressMessages(rd_query(covican, variables = "potassium", expression = "is.na(x)")))$queries
+  part <- suppressWarnings(suppressMessages(rd_query(cov, variables = "potassium", expression = "is.na(x)")))$queries
+  expect_equal(nrow(part), sum(full$Event == "baseline_visit_arm_1"))
+  # An event given in `event` that is not in the data is still an error
+  expect_error(rd_query(cov, variables = "potassium", expression = "is.na(x)", event = "follow_up_visit_da_arm_1"), class = "REDCapDM_error_argument")
+})
+
+test_that("rd_query works with fields called like its objects (e.g. `data` or `event`)", {
+  q <- function(p, ...) suppressWarnings(suppressMessages(rd_query(p, variables = "age", expression = "x > 70", ...)))$queries
+  ref <- q(covican, event = "baseline_visit_arm_1")
+  ref_all <- q(covican)
+  expect_gt(nrow(ref), 0)
+  for (name in c("data", "event", "variables", "x")) {
+    p <- add_covican_field(name)
+    expect_equal(q(p, event = "baseline_visit_arm_1"), ref)
+    expect_equal(q(p), ref_all)
+  }
+})
+
+test_that("rd_query accepts functions that don't take the variable labels, e.g. dplyr::between(), in filter and expression", {
+  q <- function(...) suppressWarnings(suppressMessages(rd_query(covican, ...)))$queries
+  expect_equal(
+    q(variables = "dm", expression = "is.na(x)", filter = "dplyr::between(age, 70.000001, Inf)"),
+    q(variables = "dm", expression = "is.na(x)", filter = "age > 70")
+  )
+  expect_equal(
+    q(variables = "age", expression = "dplyr::between(x, 70, 80)")[, c("Identifier", "Event", "Field")],
+    q(variables = "age", expression = "x >= 70 & x <= 80")[, c("Identifier", "Event", "Field")]
+  )
+})
+
+test_that("rd_query doesn't translate again R logic with brackets inside a text", {
+  data <- data.frame(record_id = c("1", "2"), status = c("[age]", "x"), age = c(10, 20))
+  dic <- data.frame(
+    field_name = c("record_id", "status", "age"), form_name = "form1", field_type = "text",
+    field_label = c("Record", "Status", "Age"), choices_calculations_or_slider_labels = "",
+    text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = c("", "", "data$status == '[age]'")
+  )
+  out <- suppressWarnings(suppressMessages(rd_query(data = data, dic = dic, variables = "age", expression = "x > 0")))
+  expect_equal(nrow(out$queries), 1)
+  expect_equal(out$queries$Identifier, 1, ignore_attr = TRUE)
+  out <- suppressWarnings(suppressMessages(rd_query(data = data, dic = transform(dic, branching_logic_show_field_only_if = ""), variables = "age", expression = "x > 0", filter = "data$status == '[age]'")))
+  expect_equal(nrow(out$queries), 1)
+})
+
+test_that("rd_query filters by the type of the variables only with the columns of the project", {
+  data <- data.frame(record_id = as.character(1:6), a = c(1, 2, 3, 1, 2, 3), b = 1)
+  dic <- data.frame(
+    field_name = c("record_id", "a", "b"), form_name = "form1", field_type = "text", field_label = c("Record", "A", "B"),
+    choices_calculations_or_slider_labels = "", text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = ""
+  )
+  for (rows in list(1:6, 6:1)) {
+    out <- suppressWarnings(suppressMessages(rd_query(data = data[rows, ], dic = dic, variables = "b", expression = "x > 0", filter = "if_all(where(is.numeric), ~ .x < 5)")))
+    expect_equal(nrow(out$queries), 6)
+    out <- suppressWarnings(suppressMessages(rd_query(data = data[rows, ], dic = dic, variables = "b", expression = "if_all(where(is.numeric), ~ .x < 5)")))
+    expect_equal(nrow(out$queries), 6)
+  }
+})
+
+test_that("rd_query keeps the argument x of a function of the expression", {
+  expected <- nrow(suppressWarnings(suppressMessages(rd_query(covican, variables = "age", expression = "is.na(x)")))$queries)
+  for (expression in c("vapply(x, function(x) is.na(x), logical(1))", "sapply(x, \\(x) is.na(x))", "vapply(x, function(v) is.na(v), logical(1))")) {
+    out <- suppressWarnings(suppressMessages(rd_query(covican, variables = "age", expression = expression)))
+    expect_equal(nrow(out$queries), expected, info = expression)
+  }
+})
+
+test_that("rd_query applies the branching logic without fields written in REDCap syntax", {
+  toy_data <- data.frame(record_id = as.character(1:3), a = c(NA, 1, NA))
+  toy_dic <- data.frame(field_name = c("record_id", "a"), form_name = "f1", field_type = "text", field_label = c("ID", "A"),
+                        text_validation_type_or_show_slider_number = "", branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+  run <- function(logic) {
+    toy_dic$branching_logic_show_field_only_if[2] <- logic
+    suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "a", expression = "is.na(x)"))
+  }
+  expect_equal(nrow(run("1 = 1")$queries), 2)
+  expect_equal(nrow(run("sum(1, 1) = 2")$queries), 2)
+  expect_equal(nrow(run("1 <> 1")$queries), 0)
+  # R logic without fields between brackets is evaluated as before
+  expect_equal(nrow(run("record_id != '1'")$queries), 1)
+  expect_equal(nrow(run("!is.na(record_id)")$queries), 2)
+})
+
+test_that("rd_query applies the R logic written by rd_dictionary() and rd_transform()", {
+  toy_data <- data.frame(record_id = LETTERS[1:6], text = c("abc", "xyz", "hello", "abc", "pat", "zz"), pattern = c("b", "y", "ell", "q", "pa", "a"),
+                         n = c(1.21, 2.5, 3.33, 1, 2, 3), q = NA, stringsAsFactors = FALSE)
+  toy_dic <- data.frame(field_name = c("record_id", "text", "pattern", "n", "q"), form_name = "f1", section_header = "", field_type = "text",
+                        field_label = c("ID", "T", "P", "N", "Q"), choices_calculations_or_slider_labels = "", field_note = "",
+                        text_validation_type_or_show_slider_number = c("", "", "", "number", ""), branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+  ids <- function(project) sort(as.character(suppressMessages(rd_query(project, variables = "q", expression = "is.na(x)"))$queries$Identifier))
+  for (logic in c("contains([text], [pattern])", "not_contain([text], [pattern])", "find([pattern], [text]) > 0", "roundup([n], 1) > 1.5", "rounddown([n], 1) < 3",
+                  "concat_ws([pattern], [text], 'x') = 'abcbx'")) {
+    project <- list(data = toy_data, dictionary = toy_dic)
+    project$dictionary$branching_logic_show_field_only_if[5] <- logic
+    original <- ids(project)
+    expect_lt(length(original), 6)
+    expect_no_warning(after_dictionary <- ids(suppressMessages(rd_dictionary(project))))
+    expect_equal(after_dictionary, original, info = logic)
+    expect_equal(ids(suppressWarnings(suppressMessages(rd_transform(project)))), original, info = logic)
+  }
+})
+
+test_that("rd_query applies the branching logic in R with double brackets", {
+  toy_data <- data.frame(record_id = LETTERS[1:6], value = c(1, 2, 0, 3, 4, 5), q = NA, stringsAsFactors = FALSE)
+  toy_dic <- data.frame(field_name = c("record_id", "value", "q"), form_name = "f1", field_type = "text", field_label = c("ID", "V", "Q"),
+                        text_validation_type_or_show_slider_number = c("", "integer", ""), branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+  ids <- function(logic) {
+    toy_dic$branching_logic_show_field_only_if[3] <- logic
+    sort(as.character(suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "q", expression = "is.na(x)"))$queries$Identifier))
+  }
+  expect_no_warning(expect_equal(ids("data[['value']] == 0"), "C"))
+  expect_no_warning(expect_length(ids("data[['value']] == 9"), 0))
+  expect_equal(ids("data$value == 0"), "C")
+})
+
+test_that("rd_query applies the branching logic in R with comments", {
+  toy_data <- data.frame(record_id = LETTERS[1:6], value = c(1, 2, 0, 3, 4, 5), q = NA, stringsAsFactors = FALSE)
+  toy_dic <- data.frame(field_name = c("record_id", "value", "q"), form_name = "f1", field_type = "text", field_label = c("ID", "V", "Q"),
+                        text_validation_type_or_show_slider_number = c("", "integer", ""), branching_logic_show_field_only_if = "", stringsAsFactors = FALSE)
+  ids <- function(logic) {
+    toy_dic$branching_logic_show_field_only_if[3] <- logic
+    sort(as.character(suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "q", expression = "is.na(x)"))$queries$Identifier))
+  }
+  expect_no_warning(expect_equal(ids("data$value == 0 # [note]"), "C"))
+  expect_equal(ids("[value] = 0"), "C")
+})
+
+test_that("rd_query keeps the texts between quotes of the expression in the messages", {
+  toy_data <- data.frame(record_id = c("1", "2", "3"), t = c("x", "AB A B", "a>b"), stringsAsFactors = FALSE)
+  toy_dic <- data.frame(field_name = c("record_id", "t"), form_name = "f1", field_type = "text", field_label = c("ID", "T"), stringsAsFactors = FALSE)
+  msg <- function(expression) unique(suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "t", expression = expression))$queries$Query)
+  expect_equal(msg("x == 'x'"), "The value is x and it should not be equal to 'x'")
+  expect_equal(msg("x == 'a>b'"), "The value is a>b and it should not be equal to 'a>b'")
+  expect_equal(msg("x %in% c('A  B', 'AB A B')"), "The value is AB A B and it should not be equal to c('A  B','AB A B')")
+  # Two expressions with different texts give two queries
+  both <- suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = c("t", "t"), expression = c("grepl('A B', x, fixed = TRUE)", "grepl('AB', x, fixed = TRUE)")))
+  expect_equal(nrow(both$queries), 2)
+  expect_equal(both$queries$Query, c("The value is AB A B and it should not be grepl('A B',,fixed=TRUE)", "The value is AB A B and it should not be grepl('AB',,fixed=TRUE)"))
+})
+
+test_that("rd_query keeps the values and the raw strings of the expression in the messages", {
+  toy_data <- data.frame(record_id = c("1", "2", "3"), t = c("A  B", " A B ", 'a" x > b & c'), stringsAsFactors = FALSE)
+  toy_dic <- data.frame(field_name = c("record_id", "t"), form_name = "f1", field_type = "text", field_label = c("ID", "T"), stringsAsFactors = FALSE)
+  run <- function(expression) suppressMessages(rd_query(data = toy_data, dic = toy_dic, variables = "t", expression = expression))
+  spaces <- run("x %in% c('A  B', ' A B ')")
+  expect_equal(spaces$queries$Query, c("The value is A  B and it should not be equal to c('A  B',' A B ')", "The value is  A B  and it should not be equal to c('A  B',' A B ')"))
+  raw <- run('x == r"--(a" x > b & c)--"')
+  expect_equal(raw$queries$Query, 'The value is a" x > b & c and it should not be equal to r"--(a" x > b & c)--"')
+  # (in the HTML summary, with > and & written as HTML)
+  expect_match(paste(raw$results, collapse = ""), 'r"--(a" x &gt; b &amp; c)--"', fixed = TRUE)
+})
+
+
+# ---- Identifier with another name ----
+
+test_that("rd_query filters by an identifier with another name", {
+  project <- make_custom_id()
+
+  res <- rd_query(project, variables = "value", expression = "x > 6", event = "visit_arm_1", filter = "subject_id == '003'")
+  expect_equal(res$queries$Identifier, "003")
+  res <- rd_query(project, variables = "value", expression = "x > 6", event = "visit_arm_1", filter = ".data$subject_id == '003'")
+  expect_equal(res$queries$Identifier, "003")
+
+  # An object of the session with the same name doesn't replace the column
+  subject_id <- "999"
+  res <- rd_query(project, variables = "value", expression = "x > 6", event = "visit_arm_1", filter = "subject_id == '003'")
+  expect_equal(res$queries$Identifier, "003")
+})
+
+test_that("rd_query checks the identifier itself", {
+  df <- data.frame(record_id = c(1, 2, NA), age = c(30, 40, 50))
+  toy_dic <- make_toy_dic(list(record_id = list(field_label = "ID", form_name = "demo"), age = list(field_label = "Age", form_name = "demo")))
+  res <- rd_query(data = df, dic = toy_dic, variables = "record_id", expression = "x > 1")
+  expect_equal(res$queries$Identifier, 2)
+  expect_equal(res$queries$Field, "record_id")
+
+  project <- make_custom_id()
+  res <- rd_query(project, variables = "subject_id", expression = "x == '002'", event = "base_arm_1")
+  expect_equal(res$queries$Identifier, "002")
+})
+
+test_that("rd_query takes the identifier from the dictionary, whatever the order of the columns", {
+  for (first in c("none", "age", "external")) {
+    project <- make_custom_id(age_first = first == "age", external_first = first == "external")
+    res <- rd_query(project, variables = "value", expression = "x > 6", event = "visit_arm_1")
+    expect_equal(res$queries$Identifier, "003")
+    expect_match(res$queries$Code, "^003-")
+  }
+})
+
+test_that("rd_query keeps the unique event name of each query, also when several events have the same label", {
+  data <- data.frame(
+    record_id = c("1", "2", "3"),
+    redcap_event_name = c("enrollment_arm_1", "enrollment_arm_1", "enrollment_arm_2"),
+    age = c(NA, 40, NA)
+  )
+  data$redcap_event_name.factor <- factor(rep("Enrollment", 3))
+  dic <- data.frame(field_name = c("record_id", "age"), form_name = "enrollment", field_type = "text", field_label = c("Record ID", "Age"), branching_logic = "")
+  project <- list(data = data, dictionary = dic)
+  q <- function(...) suppressWarnings(suppressMessages(rd_query(project, variables = "age", expression = "is.na(x)", ...)))
+
+  res <- q()
+  expect_equal(res$queries$Event, c("enrollment_arm_1", "enrollment_arm_2"))
+  expect_equal(res$queries$EventLabel, c("Enrollment", "Enrollment"))
+  expect_equal(names(res$queries)[3:4], c("Event", "EventLabel"))
+  # (the summary doesn't merge them either)
+  expect_match(as.character(res$results), "Enrollment (enrollment_arm_1)", fixed = TRUE)
+  expect_match(as.character(res$results), "Enrollment (enrollment_arm_2)", fixed = TRUE)
+
+  # add_to keeps them apart
+  both <- q(event = "enrollment_arm_2", add_to = q(event = "enrollment_arm_1"))
+  expect_equal(both$queries$Event, c("enrollment_arm_1", "enrollment_arm_2"))
+  expect_equal(both$queries$Code, c("1-1", "3-1"))
+
+  # A previous report takes the current label of its events
+  project$data$redcap_event_name.factor <- factor(c("Enrollment A", "Enrollment A", "Enrollment B"))
+  old <- q(event = "enrollment_arm_1")
+  project$data$redcap_event_name.factor <- factor(c("Inclusion A", "Inclusion A", "Enrollment B"))
+  merged <- q(event = "enrollment_arm_1", add_to = old)
+  expect_equal(nrow(merged$queries), 1)
+  expect_equal(merged$queries$Event, "enrollment_arm_1")
+  expect_equal(merged$queries$EventLabel, "Inclusion A")
+
+  # A previous report with the label in Event (created before EventLabel existed) takes the unique name when a single
+  # event of the data has that label
+  old$queries$Event <- "Inclusion A"
+  old$queries$EventLabel <- NULL
+  merged <- q(event = "enrollment_arm_1", add_to = old)
+  expect_equal(nrow(merged$queries), 1)
+  expect_equal(merged$queries$Event, "enrollment_arm_1")
+  expect_equal(merged$queries$EventLabel, "Inclusion A")
+})
+
+local({
+  d <- data.frame(
+    record_id = c("1", "2"),
+    redcap_event_name = c("a_arm_1", "b_arm_1"),
+    redcap_event_name.factor = c("A", "B"),
+    x = NA_real_, y = NA_real_
+  )
+  dic <- data.frame(
+    field_name = c("record_id", "x", "y"),
+    form_name = "f1",
+    field_type = "text",
+    field_label = c("ID", "X", "Y"),
+    branching_logic_show_field_only_if = ""
+  )
+  q <- function(data = d, variables = "x",
+                expression = "is.na(x)", ...) {
+    suppressWarnings(suppressMessages(rd_query(
+      data = data, dic = dic, variables = variables,
+      expression = expression, ...
+    )))
+  }
+  link <- list(
+    domain = "redcap.example", redcap_version = "14",
+    proj_id = 1,
+    event_id = c(a_arm_1 = 101, b_arm_1 = 102)
+  )
+  ids <- function(value) {
+    out <- link
+    out$event_id <- value
+    out
+  }
+  err <- "REDCapDM_error_argument"
+
+  test_that("event scope rejects mixed missing events", {
+    expect_error(q(event = c("a_arm_1", NA_character_)), class = err)
+
+    expect_warning(
+      z <- suppressMessages(rd_query(
+        data = d, dic = dic, variables = "x",
+        expression = "x %in% NA", event = "a_arm_1"
+      )),
+      "missing observations"
+    )
+    expect_equal(z$queries$Identifier, 1)
+
+    expect_error(
+      q(
+        data = d[c("record_id", "x", "y")],
+        link = list(domain = "host")
+      ),
+      "Incomplete", class = err
+    )
+  })
+
+  test_that("link mappings require complete and exact event identity", {
+    for (value in list(list(a_arm_1 = 101), matrix(101), numeric(0))) {
+      expect_error(
+        q(link = ids(value)), "vector of event IDs", class = err
+      )
+    }
+    for (value in list(0, 1.5, Inf, NA_real_)) {
+      expect_error(
+        q(link = ids(value)), "positive integer IDs", class = err
+      )
+    }
+    invalid_names <- list(
+      c(101, 102),
+      setNames(c(101, 102), c("a_arm_1", "")),
+      setNames(c(101, 102), c("a_arm_1", "a_arm_1"))
+    )
+    for (value in invalid_names) {
+      expect_error(
+        q(link = ids(value)), "unique event names", class = err
+      )
+    }
+
+    expect_error(
+      q(link = ids(c(a_arm_1 = 101, A = 101, b_arm_1 = 102))),
+      "same event", class = err
+    )
+    expect_error(
+      q(link = ids(c(a_arm_1 = 101))), "b_arm_1", class = err
+    )
+
+    z <- q(event = "a_arm_1", link = ids(101))
+    expect_equal(nrow(z$queries), 1L)
+    expect_match(z$queries$Link, "&event_id=101&", fixed = TRUE)
+
+    z <- q(link = ids(c(link$event_id, future_arm_1 = 303)))
+    expect_equal(z$queries$Identifier, c(1, 2))
+    expect_equal(
+      sub(".*event_id=([0-9]+)&.*", "\\1", z$queries$Link),
+      c("101", "102")
+    )
+  })
+
+  test_that("event labels resolve without guessing", {
+    ambiguous <- d
+    ambiguous$redcap_event_name.factor <- "Shared"
+    expect_error(
+      q(data = ambiguous, event = "Shared"),
+      "several events", class = err
+    )
+
+    resolve <- get(
+      "resolve_query_event_codes",
+      envir = environment(rd_query)
+    )
+    events <- data.frame(code = "a_arm_1", label = "A")
+    for (value in list(NA_character_, "")) {
+      expect_error(
+        resolve(value, events), "missing or empty", class = err
+      )
+    }
+
+    labels_only <- d[setdiff(names(d), "redcap_event_name")]
+    expect_setequal(q(data = labels_only)$queries$Event, c("A", "B"))
+
+    z <- q(data = labels_only, variables_names = "Custom X")
+    expect_setequal(z$queries$Event, c("A", "B"))
+    expect_true(all(z$queries$Description == "Custom X"))
+  })
+
+  test_that("zero summaries preserve requested names and reasons", {
+    z <- q(
+      variables = c("x", "y"), expression = "x > 0",
+      variables_names = c("Custom X", "Custom Y"),
+      query_name = c("Positive X", "Positive Y")
+    )
+    expect_equal(nrow(z$queries), 0L)
+    for (text in c("Custom X", "Custom Y", "Positive X", "Positive Y")) {
+      expect_match(z$results, text, fixed = TRUE)
+    }
+
+    expect_error(
+      q(
+        variables = c("x", "y"), expression = "x > 0",
+        variables_names = c("X", "Y", "Z")
+      ),
+      "Multiple variable names", class = err
+    )
+    expect_error(
+      q(
+        variables = c("x", "y"), expression = "x > 0",
+        query_name = c("X", "Y", "Z")
+      ),
+      "Multiple query names", class = err
+    )
+
+    z <- q(negate = TRUE)
+    expect_equal(nrow(z$queries), 0L)
+    expect_match(z$results, "should be missing", fixed = TRUE)
+
+    system <- d
+    system$f1_complete <- 0
+    z <- q(data = system, variables = "f1_complete", expression = "x > 0")
+    expect_equal(nrow(z$queries), 0L)
+    expect_match(z$results, "f1_complete", fixed = TRUE)
+  })
+
+  test_that("DAG aliases reserve names and retain every record", {
+    g <- data.frame(
+      record_id = as.character(1:5),
+      x = NA_real_, y = NA_real_,
+      redcap_data_access_group =
+        c("(Unassigned)", NA, "", "-", "(Empty DAG)")
+    )
+    z <- q(data = g, by_dag = TRUE)
+
+    expect_equal(sum(vapply(z$queries, nrow, integer(1))), 5L)
+    expect_setequal(
+      names(z$queries),
+      c("(Unassigned)", "(Unassigned)_1",
+        "(Empty DAG)", "(Empty DAG)_1", "-")
+    )
+    expect_setequal(names(z$queries), names(z$results))
+    expect_equal(z$queries[["(Unassigned)"]]$Identifier, 1)
+    expect_equal(z$queries[["(Empty DAG)"]]$Identifier, 5)
+    expect_true(is.na(z$queries[["(Unassigned)_1"]]$DAG))
+    expect_identical(z$queries[["(Empty DAG)_1"]]$DAG, "")
+  })
+})
+
+test_that("rd_query keeps apart in results the variables whose long names begin in the same way", {
+  v1 <- "laboratory_measurement_value_first"
+  v2 <- "laboratory_measurement_value_second"
+  lab <- "Laboratory measurement value obtained at the visit of the study protocol"
+  data <- data.frame(record_id = c("1", "2"), redcap_event_name = "e_arm_1", a = c(NA, 1), b = c(1, NA), f = c(1, 1))
+  names(data)[3:4] <- c(v1, v2)
+  dic <- data.frame(field_name = c("record_id", v1, v2, "f"), form_name = "f", field_type = "text", field_label = c("ID", lab, lab, "F"),
+                    choices_calculations_or_slider_labels = "", branching_logic_show_field_only_if = c("", "[f] = '1'", "[f] <> '2'", ""),
+                    text_validation_type_or_show_slider_number = "")
+  # The cells of the rows of a table of `results`
+  table_rows <- function(html) {
+    html <- gsub("\n", " ", html)
+    rows <- regmatches(html, gregexpr("<tr>.*?</tr>", html))[[1]][-1]
+    lapply(rows, function(r) trimws(gsub("<[^>]+>", "", regmatches(r, gregexpr("<td[^>]*>.*?</td>", r))[[1]])))
+  }
+
+  for (dag in c(FALSE, TRUE)) {
+    d <- data
+    if (dag) d$redcap_data_access_group <- "g1"
+    res <- suppressWarnings(suppressMessages(rd_query(data = d, dic = dic, variables = c(v1, v2), expression = c("is.na(x)", "is.na(x)"), by_dag = dag)))
+    expect_equal(nrow(if (dag) res$queries[[1]] else res$queries), 2)
+    rows <- table_rows(as.character(if (dag) res$results[[1]] else res$results))
+    # One row for each variable, with its own total and branching logic (the names are only shortened to show them)
+    expect_length(rows, 2)
+    expect_true(all(vapply(rows, function(r) any(r == "laboratory_measurement_...") && any(r == "1"), logical(1))))
+    expect_setequal(vapply(rows, function(r) r[length(r)], character(1)), c("[f] = '1'", "[f] &lt;&gt; '2'"))
+  }
 })

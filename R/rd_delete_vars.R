@@ -1,7 +1,7 @@
 #' Delete Variables from REDCap Dataset and Dictionary
 #'
 #' @description
-#' `r lifecycle::badge('experimental')`
+#' `r lifecycle::badge('stable')`
 #'
 #' Deletes selected variables from a REDCap dataset and its dictionary, keeping them consistent and preserving variable labels.
 #'
@@ -11,19 +11,20 @@
 #' @param event_form Only applicable for longitudinal projects (presence of events). Event-to-form mapping for longitudinal projects.
 #' @param vars Optional. A character vector of variable names to remove from both the dataset and dictionary.
 #' @param pattern Optional. A character vector of regular expression patterns. Variables matching these patterns will be removed from the dataset and dictionary.
-#'
+#' @param forms Optional. A character vector of form names (as in the `form_name` column of the dictionary). All the variables of these forms will be removed from the dataset and dictionary.
 #'
 #' @details
-#' - Ensure that at least one of `vars` or `pattern` is specified.
+#' - Ensure that at least one of `vars`, `pattern` or `forms` is specified.
 #' - Removes specified variables and their factor versions (e.g., `variable.factor`) from the dataset.
 #' - Removes matching variables from the dictionary.
 #' - Warns about factor versions of variables matching patterns, recommending use of `rd_factor()` if necessary.
-#'
+#' - With `forms`, every variable of the form is removed: its factor versions, checkbox options, recalculated versions (`_recalc`) and the form's `_complete` and `_timestamp` fields. The record identifier is always kept. The forms are also removed from `event_form`, and so are the rows of the repeating instruments among them.
+#' 
 #' @return A list containing:
 #' \describe{
 #'   \item{data}{The updated dataset with specified variables removed.}
 #'   \item{dictionary}{The updated REDCap dictionary.}
-#'   \item{event_form}{The original event-form mapping (if applicable).}
+#'   \item{event_form}{The event-form mapping (if applicable), without the removed forms.}
 #'   \item{results}{A summary message describing the variable removal operation.}
 #' }
 #'
@@ -34,16 +35,23 @@
 #'   vars = c("potassium", "leuk_lymph")
 #' )
 #'
-#' # Delete variables matching patterns
+#' # Delete variables matching patterns (here, the inclusion and exclusion criteria)
 #' result <- rd_delete_vars(
 #'   data = covican$data,
 #'   dic = covican$dictionary,
-#'   pattern = c("_complete$", "_other$")
+#'   pattern = c("^inc_", "^exc_")
 #' )
 #'
+#' # Delete every variable of a form
+#' result <- rd_delete_vars(
+#'   project = covican,
+#'   forms = "laboratory_findings"
+#' )
+#'
+#' @family process functions
 #' @export
 
-rd_delete_vars <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL, vars = NULL, pattern = NULL) {
+rd_delete_vars <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL, vars = NULL, pattern = NULL, forms = NULL) {
   results <- NULL
 
   # Handle potential overwriting when both `project` and other arguments are provided
@@ -53,13 +61,22 @@ rd_delete_vars <- function(project = NULL, data = NULL, dic = NULL, event_form =
   }
 
   # Ensure both `data` and `dic` are provided; stop if either is missing
-  if (is.null(data) | is.null(dic)) {
-    stop("Both `data` and `dic` (data and dictionary) arguments must be provided.", call. = FALSE)
+  if (is.null(data) || is.null(dic)) {
+    rd_abort("Both {.arg data} and {.arg dic} (data and dictionary) arguments must be provided.")
+  }
+  
+  # Error: invalid arguments
+  check_inputs(data, dic, dic_cols = "field_name")
+  data <- plain_data(data)
+  dic <- plain_dic(dic)
+  
+  for (arg in c("vars", "pattern", "forms")) {
+    check_strings(get(arg), arg)
   }
 
-  # Ensure one of the arguments is fullfilled
-  if (is.null(vars) & is.null(pattern)) {
-    stop("At least one of the 'vars' or 'pattern' arguments must be provided.", call. = FALSE)
+  # Ensure one of the arguments is fulfilled
+  if (is.null(vars) && is.null(pattern) && is.null(forms)) {
+    rd_abort("At least one of the {.arg vars}, {.arg pattern} or {.arg forms} arguments must be provided.", class = "REDCapDM_error_argument")
   }
 
   # Extract labels from the data to reapply later
@@ -72,29 +89,44 @@ rd_delete_vars <- function(project = NULL, data = NULL, dic = NULL, event_form =
     }
   })
 
+  # The record identifier: record_id or else the first field of the dictionary (REDCap's record ID), see id_field()
+  id_var <- id_field(data, dic)
+  protected <- unique(c(id_var, "record_id"))
+
+  # Checkbox fields with options in the data, to remove from the dictionary those that are left without any
+  checkbox_fields <- if ("field_type" %in% names(dic)) dic$field_name[dic$field_type %in% "checkbox"] else character(0)
+  checkbox_before <- checkbox_fields[vapply(checkbox_fields, function(f) any(startsWith(names(data), paste0(f, "___"))), logical(1))]
+
   # If `vars` is specified, iterate through each variable and remove it from the data and dictionary
   if (!is.null(vars)) {
     vars_missing <- setdiff(vars, names(data))
 
     if (length(vars_missing) > 0) {
-      stop(stringr::str_glue("The following variables are not present in the dataset: {paste0(vars_missing, collapse = ', ')}.\nPlease remove them from the `vars` argument."), call. = FALSE)
+      rd_abort(c("The following variables are not present in the dataset: {.var {vars_missing}}.", "i" = "Please remove them from the {.arg vars} argument."), class = "REDCapDM_error_argument")
+    }
+    
+    # Error: the record identifier is needed by every other function
+    if (any(protected %in% vars)) {
+      id_removed <- intersect(vars, protected)[1]
+      rd_abort("{.code {id_removed}} can't be removed: the other functions need the record identifier.")
     }
 
-    for (i in seq_along(vars)) {
-      # Remove the variable from the dataset
-      data <- data |>
-        dplyr::select(!vars[i])
+    # Columns with the Missing Data Codes of the variables (redcap_data(rm_mdc = FALSE))
+    mdc_cols <- mdc_columns(names(data), dic$field_name)
 
-      # Check if the factor version of the variable exists and remove it if present
-      if (paste0(vars[i], ".factor") %in% names(data)) {
-        data <- data |>
-          dplyr::select(!paste0(vars[i], ".factor"))
-      }
+    # Columns to remove: the variables, their factor versions and their columns with the Missing Data Codes
+    # (redcap_data(rm_mdc = FALSE)), each one once (e.g. `vars = c("status", "status.factor")`)
+    vars_cols <- unique(c(
+      vars,
+      intersect(paste0(vars, ".factor"), names(data)),
+      intersect(paste0(vars, "_mdc"), mdc_cols)
+    ))
+    data <- data |>
+      dplyr::select(!dplyr::all_of(vars_cols))
 
-      # Remove the variable from the dictionary
-      dic <- dic |>
-        dplyr::filter(.data$field_name != vars[i])
-    }
+    # Remove the variables from the dictionary
+    dic <- dic |>
+      dplyr::filter(!.data$field_name %in% vars)
   }
 
 
@@ -119,18 +151,79 @@ rd_delete_vars <- function(project = NULL, data = NULL, dic = NULL, event_form =
         dplyr::select(!dplyr::matches(comb_pattern))
 
       # Warn if factor versions of the variables matching the patterns are present in the dataset
-      if (any(pattern_factor %in% names(vars_eliminated)) & any(grepl("\\$", pattern))) {
-        warning("The dataset contains factor versions of variables matching the specified patterns. To properly remove them, use the `rd_factor` function first.", call. = FALSE)
+      if (any(pattern_factor %in% names(vars_eliminated)) && any(grepl("\\$", pattern))) {
+        rd_warn("The dataset contains factor versions of variables matching the specified patterns. To properly remove them, use the {.fn rd_factor} function first.")
       }
+    }
+
+    # Variables matching the pattern (never the record identifier nor the REDCap columns of events and repetitions)
+    matched <- grep(comb_pattern, names(data), value = TRUE, ignore.case = TRUE)
+    matched <- matched[!matched %in% protected & !grepl("^redcap_(event_name|repeat_instrument|repeat_instance)(\\.factor)?$", matched)]
+
+    if (length(matched) == 0) {
+      rd_warn("No variable matches the pattern(s) {.val {pattern}}: nothing was removed.")
     }
 
     # Remove variables matching the pattern from the dataset
     data <- data |>
-      dplyr::select(!dplyr::matches(comb_pattern))
+      dplyr::select(!dplyr::all_of(matched))
 
-    # Remove variables matching the pattern from the dictionary
+    # Remove variables matching the pattern from the dictionary (also without distinguishing upper and lower case, as in
+    # the data)
     dic <- dic |>
-      dplyr::filter(!grepl(comb_pattern, .data$field_name))
+      dplyr::filter(!grepl(comb_pattern, .data$field_name, ignore.case = TRUE) | .data$field_name %in% protected)
+  }
+
+  
+  # If `forms` is specified, remove every variable of these forms
+  if (!is.null(forms)) {
+    if (!"form_name" %in% names(dic)) {
+      rd_abort("The dictionary doesn't have the {.code form_name} column, needed to use the {.arg forms} argument.")
+    }
+
+    forms_missing <- setdiff(forms, dic$form_name)
+
+    if (length(forms_missing) > 0) {
+      rd_abort(c("The following forms are not present in the dictionary: {.val {forms_missing}}.", "i" = "Please remove them from the {.arg forms} argument."), class = "REDCapDM_error_argument")
+    }
+
+    # The record identifier is never removed
+    form_fields <- setdiff(dic$field_name[dic$form_name %in% forms], id_var)
+
+    # Data columns of these fields: factor versions, checkbox options and the _complete/_timestamp fields of the forms
+    base_names <- sub("\\.factor$", "", names(data))
+    form_cols <- names(data)[
+      (base_names %in% form_fields | sub("___.*$", "", base_names) %in% form_fields |
+         base_names %in% c(paste0(forms, "_complete"), paste0(forms, "_timestamp"))) &
+        base_names != id_var
+    ]
+    
+    # Columns with the Missing Data Codes of these fields (redcap_data(rm_mdc = FALSE))
+    form_cols <- c(form_cols, intersect(paste0(form_fields, "_mdc"), mdc_columns(names(data), dic$field_name)))
+
+    data <- data |>
+      dplyr::select(!dplyr::all_of(form_cols))
+
+    # Rows of the removed repeating instruments are left without data
+    if ("redcap_repeat_instrument" %in% names(data)) {
+      data <- data |>
+        dplyr::filter(!(.data$redcap_repeat_instrument %in% .env$forms))
+    }
+
+    dic <- dic |>
+      dplyr::filter(!.data$field_name %in% form_fields)
+
+    if (!is.null(event_form) && "form" %in% names(event_form)) {
+      event_form <- event_form |>
+        dplyr::filter(!.data$form %in% forms)
+    }
+  }
+
+  # Checkboxes whose options were all removed are removed from the dictionary too
+  orphans <- checkbox_before[!vapply(checkbox_before, function(f) any(startsWith(names(data), paste0(f, "___"))), logical(1))]
+  if (length(orphans) > 0) {
+    dic <- dic |>
+      dplyr::filter(!.data$field_name %in% orphans)
   }
 
   # Reapply variable labels to the dataset after modifications

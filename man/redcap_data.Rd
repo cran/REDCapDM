@@ -12,13 +12,15 @@ redcap_data(
   token = NA,
   sep = ",",
   filter_field = NULL,
-  survey_fields = FALSE
+  survey_fields = FALSE,
+  rm_mdc = TRUE,
+  mdc = NULL
 )
 }
 \arguments{
 \item{data_path}{Path to exported R file (use with \code{dic_path}).}
 
-\item{dic_path}{Path to the dictionary file (CSV or XLSX; use with \code{data_path})..}
+\item{dic_path}{Path to the dictionary file (CSV or XLSX; use with \code{data_path}). Not used with the API.}
 
 \item{event_path}{Path to the event-form mapping file (CSV or XLSX) for longitudinal projects (downloadable via the \verb{Designate Instruments for My Events} tab within the \verb{Project Setup} section of REDCap).}
 
@@ -26,17 +28,29 @@ redcap_data(
 
 \item{token}{REDCap API token (use with \code{uri}).}
 
-\item{sep}{Character string specifying the field separator for the exported dictionary CSV file. Defaul \code{","}.}
+\item{sep}{Character string specifying the field separator for the exported dictionary CSV file. Default \code{","}.}
 
-\item{filter_field}{Optional character vector of field names to request from the API.}
+\item{filter_field}{Optional character vector of field names to request from the API. It must include the record
+identifier (the first field of the project, e.g. \code{record_id}).}
 
 \item{survey_fields}{Logical; include survey-related fields when pulling via API. Default \code{FALSE}.}
+
+\item{rm_mdc}{Logical. Remove Missing Data Codes (default \code{TRUE}). With \code{FALSE}, validated text and categorical fields keep their original missing codes in \verb{<field>_mdc} columns. Validated text fields contain \code{NA} in those rows; categorical fields also retain an additional category in their \code{.factor} version.}
+
+\item{mdc}{Optional Missing Data Codes of the project, besides the default ones of REDCap (\code{NI}, \code{UNK}, \code{NASK}, ...), which are always
+used: a vector of codes, e.g. \code{c("-999", "-888")}. A code can have a label, written as \code{code = label}
+(e.g. \code{c("-999" = "Not applicable", "-888")}): with \code{rm_mdc = FALSE}, the \code{.factor} version of the multiple-choice fields shows the
+label instead of the code. Numeric codes are also found in numeric fields, also when written in another way (e.g. \code{-999.0}
+for \code{-999}). With the API, the codes defined in the project
+(Project Setup > Additional customizations > Missing Data Codes) are added automatically. As with the default codes, they are
+searched in the validated text fields (numbers, dates, ...), the multiple-choice fields and the checkboxes, so they must not be values
+that the fields can take (e.g. the code of an option).}
 }
 \value{
 A list with:
 \itemize{
 \item \code{data}: Imported dataset.
-\item \code{dictionary}: Variable dictionary (project metadata).
+\item \code{dictionary}: Variable dictionary (project meta data).
 \item \code{event_form}: Event-form mapping for longitudinal projects (if applicable).
 }
 }
@@ -55,6 +69,18 @@ Two import modes are supported:
 If the project is longitudinal, provide \code{event_path} (instrument–event mapping)
 or the function will attempt to fetch it from the API when using API mode.
 
+With the API, the metadata of the project (dictionary, project information, events, instruments, ...) and the
+records are read with several requests: the values and their labels are read separately (in batches of records,
+and the labels again if the records changed). The record identifiers are read as text in
+all of them (long identifiers such as \code{9007199254740993}, or \code{100000000000000}, are not changed), and the
+identifier is a number only when its text is that number, as with the exported files. The labels of the events
+(\code{redcap_event_name.factor}), repeated instruments and data access groups are given to each row by its code (the
+unique event name, instrument or data access group), and they are checked with the metadata of the project (its
+events, arms, instruments and data access groups): if the records changed between the values and the labels, the labels are
+read again, and the function stops if they keep changing. When that metadata can't be read, those columns have
+the codes instead of the labels, with a warning (except a single code with a single label in all the rows, e.g. the
+data access group of a user assigned to a group).
+
 \strong{Steps for using exported data in REDCap:}
 \enumerate{
 \item Use the REDCap \emph{Export Data} function and choose \emph{R Statistical Software} format.
@@ -63,11 +89,13 @@ or the function will attempt to fetch it from the API when using API mode.
 \item A CSV file with observations.
 \item An R script to format variables for import.
 }
-\item Ensure the exported files, dictionary, and event mapping (if any) are in the same directory.
+\item Keep the R script and its CSV file in the same directory (the script reads the CSV from its folder). The
+dictionary and the event mapping can be in other folders.
 }
 }
 \note{
-To use other package functions effectively, include the \code{dic_path} argument to load the project dictionary.
+With the exported files, \code{dic_path} is required to load the project dictionary (with the API, the dictionary is
+read from REDCap).
 
 \itemize{
 \item Use either exported-files mode (\code{data_path} + \code{dic_path}) \strong{or} API mode (\code{uri} + \code{token}) — not both.

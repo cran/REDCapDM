@@ -1,3 +1,5 @@
+skip_if_not_installed("openxlsx")
+
 test_that("rd_export writes an xlsx file without password and returns success message", {
   df <- head(covican$data, 3)
   path <- tempfile(fileext = ".xlsx")
@@ -37,7 +39,7 @@ test_that("rd_export warns if links detected but no column argument and no 'Link
 })
 
 test_that("rd_export errors when 'column' argument is provided but column doesn't exist", {
-  df <- head(covican$queries, 2)
+  df <- head(covican$data, 2)
   path <- tempfile(fileext = ".xlsx")
 
   expect_error(
@@ -72,7 +74,7 @@ test_that("rd_export saves with password and returns password-protection message
 
   expect_message(
     rd_export(queries = df, path = path, password = pw),
-    regexp = "with password protection"
+    regexp = "protected from edits by a password"
   )
 
   expect_true(file.exists(path))
@@ -102,3 +104,80 @@ test_that("rd_export saves with password and returns password-protection message
 })
 
 
+test_that("rd_export stops when there is nothing to export or the folder doesn't exist", {
+  expect_error(rd_export(queries = NULL), "There are no queries to export")
+  expect_error(rd_export(queries = head(covican$data, 2), path = file.path(tempfile(), "q.xlsx")), "does not exist")
+})
+
+test_that("rd_export stops with invalid sheet names and with a folder as path", {
+  df <- head(covican$data, 2)
+  expect_error(rd_export(queries = df, path = tempfile(fileext = ".xlsx"), sheet_name = "a/b"), class = "REDCapDM_error_argument")
+  expect_error(rd_export(queries = df, path = tempfile(fileext = ".xlsx"), sheet_name = strrep("x", 32)), class = "REDCapDM_error_argument")
+  expect_error(rd_export(queries = df, path = tempdir()), class = "REDCapDM_error_file")
+
+  path <- tempfile(fileext = ".xlsx")
+  expect_message(rd_export(queries = df, path = path, sheet_name = strrep("x", 31)), "successfully created")
+  expect_equal(openxlsx::getSheetNames(path), strrep("x", 31))
+})
+
+test_that("rd_export accepts the data frame of queries as its first argument and explains a wrong project", {
+  q <- suppressMessages(rd_query(covican, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+  path <- tempfile(fileext = ".xlsx")
+  expect_message(rd_export(q$queries, path = path), "successfully created")
+  expect_equal(nrow(openxlsx::read.xlsx(path)), nrow(q$queries))
+  expect_error(rd_export(project = "queries", path = tempfile(fileext = ".xlsx")), class = "REDCapDM_error_argument")
+})
+
+test_that("rd_export writes the links of a factor column and keeps the format of the dates", {
+  queries <- data.frame(
+    Identifier = c("1", "2"), Date = as.Date(c("2024-02-29", "2024-03-01")),
+    Time = as.POSIXct(c("2024-02-29 10:30:00", "2024-03-01 08:00:00"), tz = "UTC"),
+    Link = factor(c("https://redcap.example.org/a", "https://redcap.example.org/b"))
+  )
+  path <- tempfile(fileext = ".xlsx")
+  suppressMessages(rd_export(queries = queries, column = "Link", path = path))
+
+  out <- openxlsx::read.xlsx(path, detectDates = TRUE)
+  expect_equal(out$Link, as.character(queries$Link))
+  # (read as dates: the cells keep their date format)
+  expect_equal(as.Date(out$Date), queries$Date)
+
+  files <- tempfile()
+  utils::unzip(path, exdir = files)
+  rels <- paste(readLines(list.files(files, "sheet1.xml.rels", recursive = TRUE, full.names = TRUE), warn = FALSE), collapse = "")
+  expect_true(all(vapply(as.character(queries$Link), grepl, logical(1), x = rels, fixed = TRUE)))
+})
+
+
+test_that("export defaults and precedence preserve the selected queries", {
+  skip_if_not_installed("mockery")
+  withr::local_options(REDCapDM.quiet = TRUE)
+
+  q <- data.frame(
+    Identifier = c("1", "2"),
+    Link = factor(c("https://example/a", "https://example/b"))
+  )
+  saved <- list()
+  export <- rd_export
+
+  mockery::stub(
+    export, "openxlsx::saveWorkbook",
+    function(wb, file, overwrite = FALSE, ...) {
+      saved$workbook <<- wb
+      saved$path <<- file
+      saved$overwrite <<- overwrite
+      invisible(TRUE)
+    }
+  )
+
+  expect_warning(
+    export(project = list(queries = q), queries = data.frame(wrong = 1)),
+    "provided twice"
+  )
+
+  out <- openxlsx::read.xlsx(saved$workbook)
+  expect_equal(out$Identifier, c("1", "2"), ignore_attr = TRUE)
+  expect_equal(out$Link, as.character(q$Link))
+  expect_match(saved$path, "example\\.xlsx$")
+  expect_true(saved$overwrite)
+})

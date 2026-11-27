@@ -7,27 +7,22 @@
 check_queries(old, new, report_title = NULL, return_viewer = TRUE)
 }
 \arguments{
-\item{old}{Data frame containing the previous (older) query report. Must include
-\code{Identifier}, \code{Description} and \code{Query} columns (character or factor).}
+\item{old}{Data frame containing the previous (older) query report. Must include \code{Identifier} (text, factor or number), \code{Description} and \code{Query} columns (character or factor).}
 
-\item{new}{Data frame containing the newer query report. Must include
-\code{Identifier}, \code{Description} and \code{Query} columns (character or factor).
-If \code{new} contains a \code{Code} column, it will be removed at the start of processing.}
+\item{new}{Data frame containing the newer query report. Must include \code{Identifier} (text, factor or number), \code{Description} and \code{Query} columns (character or factor). If \code{new} contains a \code{Code} column, it will be removed at the start of processing.}
 
-\item{report_title}{Optional single string used as the caption for the HTML summary table.
-Defaults to \code{"Comparison report"} when not supplied or when \code{NA}.}
+\item{report_title}{Optional single string used as the caption for the HTML summary table. With \code{NULL} (the default), the caption is \code{"Comparison report"}; \code{NA} is not accepted.}
 
-\item{return_viewer}{Logical; if \code{TRUE} (default) an HTML table (knitr/kable + kableExtra)
-summarizing the counts per state is produced and returned in the \code{results} element of the
-returned list. If \code{FALSE}, no HTML viewer is produced (useful for non-interactive runs).}
+\item{return_viewer}{Logical; if \code{TRUE} (default) an HTML table (knitr/kable + kableExtra) summarizing the counts per state is produced and returned in the \code{results} element of the returned list. If \code{FALSE}, no HTML viewer is produced (useful for non-interactive runs).}
 }
 \value{
-A list with two elements:
+A list of class \code{REDCapDM_report}, which prints a short summary (see \code{\link[=print.REDCapDM_report]{print.REDCapDM_report()}}), with two elements:
 \describe{
 \item{\code{queries}}{A data frame containing all queries present in either \code{old} or \code{new}.
 A factor column \code{Modification} indicates the state for each row (levels: \code{Pending},
 \code{Solved}, \code{Miscorrected}, \code{New}). The function also reassigns \code{Code}
-values so codes are consistent per \code{Identifier}.}
+values so codes are consistent per \code{Identifier}: a code is the number of each query of its record in this
+result, not a permanent identifier of the query (the same query can have another code in another comparison).}
 \item{\code{results}}{If \code{return_viewer = TRUE}, an HTML \code{knitr::kable} (styled with
 \code{kableExtra}) summarising totals per state. If \code{return_viewer = FALSE}, this is \code{NULL}.}
 }
@@ -42,8 +37,9 @@ query into one of four statuses:
 \item \strong{Solved} — the query was present in the old report but is absent from the new report,
 \item \strong{New} — the query appears in the new report but was not present in the old report,
 \item \strong{Miscorrected} — a special case where a query in the new report is marked as \code{New}
-but shares the same \code{Identifier} and \code{Description} as an existing record (suggesting a
-re-issued or modified query for the same identifier).
+but the old report has a query with the same \code{Identifier}, \code{Event}, \code{Repetition} and
+\code{Field} (each of them when both reports have it; \code{Description} when they don't have \code{Field}),
+suggesting a re-issued or modified query for the same record and field.
 }
 
 The function returns a detailed comparison table of queries with a \code{Modification} factor (one of the four statuses) and an HTML summary table showing counts per status.
@@ -52,11 +48,12 @@ The function returns a detailed comparison table of queries with a \code{Modific
 Requirements:
 \itemize{
 \item Both \code{old} and \code{new} must be data frames.
-\item Both data frames must contain at least the following character columns:
-\code{Identifier}, \code{Description}, and \code{Query}.
-\item A \code{Code} column is optional; if present it will be preserved and considered
-for sorting and output. If \code{Code} exists in \code{new}, it is removed at the
-beginning of the routine to avoid conflicts with re-assigned codes.
+\item Both data frames must contain at least the following columns:
+\code{Identifier} (text, factor or number), \code{Description}, and \code{Query}.
+\item Every query must have an \code{Identifier} (the record identifier of the data).
+\item A \code{Code} column is optional; the codes of \code{old} are used to sort the queries, and the
+codes of the result are assigned again (see the value). If \code{Code} exists in \code{new}, it is removed at
+the beginning of the routine to avoid conflicts with re-assigned codes.
 }
 
 The function merges the two reports, constructs composite keys used for comparison, classifies each row into a modification state, detects and re-labels \code{Miscorrected} cases, reassigns a \code{Code} per \code{Identifier} to keep codes consistent, and returns a detailed dataset plus an optional HTML summary viewer.
@@ -67,13 +64,25 @@ The function merges the two reports, constructs composite keys used for comparis
 \item \strong{Column types:} If \code{Identifier}, \code{Description} or \code{Query} are
 factors, they will be used in the comparison — it is recommended to convert them to
 character prior to calling \code{check_queries()} to avoid factor-level mismatches.
-\item \strong{Sorting:} When \code{Identifier} values contain a dash (e.g. \code{"100-20"}),
-the function attempts to split into numeric \code{center} and \code{id} parts for
-logical ordering. Otherwise \code{Identifier} is coerced to numeric for ordering.
-\item \strong{Miscorrected detection:} A \code{Miscorrected} label is assigned when more
-than one row shares the same \code{Identifier + Description} composite and a row is
-otherwise classified as \code{New} — this signals a likely re-issued or modified query
-for an existing identifier.
+\item \strong{Sorting:} The rows are sorted by \code{Identifier} in natural order (e.g. \code{"100-2"}
+before \code{"100-10"}). \code{Identifier} is returned as a number only when every identifier is a
+plain number without leading zeros (e.g. \code{"007"} is kept as text).
+\item \strong{Identity of a query:} a query is the same in both reports when it has the same \code{Identifier},
+\code{Event} and \code{Repetition} (when both reports have them), \code{Field} (when both reports have it;
+otherwise \code{Description}) and \code{Query}. \code{Event} is the unique event name and \code{Field} the
+name of the field: changing the display labels of events, arms or fields doesn't solve their queries. Their labels
+(\code{EventLabel} and \code{Description}) and the other columns (e.g. \code{Link} or \code{DAG}) are taken from
+the new report, so a query whose label or link changed is still one pending query.
+\item \strong{Reports created before \code{EventLabel} existed:} \code{rd_query()} could store event labels
+in \code{Event} when factor labels were available. Reports from \code{rd_event()} already stored unique event
+names there, but used labels in their default \code{Query} text. Recognised legacy labels and default
+missing-event query texts are normalised to unique event names. Shared labels cannot be resolved automatically.
+\item \strong{Miscorrected detection:} A \code{Miscorrected} label is assigned to a query that would
+otherwise be \code{New} when the old report has a query of the same record (\code{Identifier}), event
+(\code{Event}) and repetition (\code{Repetition}), when both reports have these columns, and of the same
+variable: the same \code{Field} when both reports have it, or else the same \code{Description}. This signals a
+likely re-issued or modified query. New queries without such a query in the old report are
+\code{New}, also when there are several of them for the same field.
 }
 }
 
@@ -101,3 +110,10 @@ head(res$queries)
 res$results
 
 }
+\seealso{
+Other query functions:
+\code{\link[=rd_event]{rd_event()}},
+\code{\link[=rd_export]{rd_export()}},
+\code{\link[=rd_query]{rd_query()}}
+}
+\concept{query functions}

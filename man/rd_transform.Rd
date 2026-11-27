@@ -32,7 +32,7 @@ rd_transform(
 
 \item{checkbox_labels}{Character vector of length 2 for labels of unchecked/checked values. Default: \code{c("No", "Yes")}.}
 
-\item{na_logic}{Controls how missing values are set based on the branching logic of a checkbox. Must be one of \code{"none"} (do nothing), \code{"missing"} (set to \code{NA} only when the logic evaluation is \code{NA}), or \code{"eval"} (set to \code{NA} when the logic evaluates to \code{FALSE}). Defaults to \code{"none"}.}
+\item{na_logic}{Controls how missing values are set based on the branching logic of a checkbox. Must be one of \code{"none"} (do nothing), \code{"missing"} (set to \code{NA} only when the logic evaluation is \code{NA}), or \code{"eval"} (set to \code{NA} when the logic evaluates to \code{FALSE} or \code{NA}). Defaults to \code{"none"}.}
 
 \item{exclude_recalc}{Optional. Character vector of field names to exclude from recalculation.}
 
@@ -48,12 +48,12 @@ rd_transform(
 
 \item{which_form}{Character. If \code{final_format = "by_form"}, return only this form.}
 
-\item{wide}{Logical. If \code{TRUE} (for form-based splits), repeated instances are returned in wide format. Defaults to \code{FALSE}.}
+\item{wide}{Logical. If \code{TRUE} (for form-based splits), repeated instances are returned in wide format. Default \code{NULL}, which is \code{FALSE} when the data is split by form.}
 }
 \value{
 A list with elements:
 \describe{
-\item{data}{Transformed data (data.frame or nested list when split).}
+\item{data}{Transformed data. With \code{final_format = "by_event"} or \code{"by_form"}, as in \code{rd_split()}: a tibble with one row per event or form and its dataset in the list-column \code{df} (e.g. \code{trans$data$df[[1]]}), or the \code{data.frame} of the event or form chosen with \code{which_event} or \code{which_form}.}
 \item{dictionary}{Updated dictionary data.frame.}
 \item{event_form}{Event–form mapping (if applicable).}
 \item{results}{Character summary of transformation steps performed.}
@@ -62,7 +62,7 @@ A list with elements:
 \description{
 \ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
-Transforms the raw REDCap data read by the \code{redcap_data} function. The function runs in one-step pipeline all functions dedicated to processing the data and returns the transformed data and dictionary, along with a summary of each step done.
+Transforms the raw REDCap data read by the \code{redcap_data} function. The function runs in one-step pipeline the functions dedicated to processing the data (\code{rd_delete_vars()}, \code{rd_dates()}, \code{rd_recalculate()}, \code{rd_checkbox()}, \code{rd_factor()}, \code{rd_dictionary()} and, with \code{final_format}, \code{rd_split()}) and returns the transformed data and dictionary, along with a summary of each step done. \code{rd_insert_na()} is not part of it: its filters are specific to each project, so apply it separately.
 }
 \examples{
 # Minimal usage (project object or data + dictionary)
@@ -79,3 +79,16 @@ trans <- rd_transform(covican,
                       wide = TRUE)
 
 }
+\seealso{
+Other process functions:
+\code{\link[=rd_checkbox]{rd_checkbox()}},
+\code{\link[=rd_dates]{rd_dates()}},
+\code{\link[=rd_delete_vars]{rd_delete_vars()}},
+\code{\link[=rd_dictionary]{rd_dictionary()}},
+\code{\link[=rd_factor]{rd_factor()}},
+\code{\link[=rd_insert_na]{rd_insert_na()}},
+\code{\link[=rd_recalculate]{rd_recalculate()}},
+\code{\link[=rd_rlogic]{rd_rlogic()}},
+\code{\link[=rd_split]{rd_split()}}
+}
+\concept{process functions}

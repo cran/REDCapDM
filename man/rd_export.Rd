@@ -14,7 +14,7 @@ rd_export(
 )
 }
 \arguments{
-\item{project}{A list containing the dataframe of queries and results (expected \code{rd_query} or \code{rd_event} output). Overrides \code{queries}.}
+\item{project}{A list containing the dataframe of queries and results (expected \code{rd_query} or \code{rd_event} output). Overrides \code{queries}. A data frame of queries is also accepted (e.g. \code{rd_export(report$queries)}).}
 
 \item{queries}{A data frame of identified queries.}
 
@@ -30,18 +30,25 @@ rd_export(
 An \code{.xlsx} file written to the specified path.
 }
 \description{
-\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#experimental}{\figure{lifecycle-experimental.svg}{options: alt='[Experimental]'}}}{\strong{[Experimental]}}
+\ifelse{html}{\href{https://lifecycle.r-lib.org/articles/stages.html#stable}{\figure{lifecycle-stable.svg}{options: alt='[Stable]'}}}{\strong{[Stable]}}
 
 Export a query dataset (e.g., from \code{rd_query} or \code{rd_event}) to an \code{.xlsx} file. The function can optionally convert a column of URLs into Excel hyperlinks and apply password protection to the worksheet.
 }
 \examples{
-\dontrun{
-rd_export(
-  queries = my_queries,
-  column = "Link",
-  sheet_name = "My Queries",
-  path = "queries.xlsx"
-)
+if (requireNamespace("openxlsx", quietly = TRUE)) {
+  result <- rd_query(covican, variables = "age", expression = "x > 80")
+  rd_export(
+    result,
+    sheet_name = "My Queries",
+    path = file.path(tempdir(), "queries.xlsx")
+  )
 }
 
 }
+\seealso{
+Other query functions:
+\code{\link[=check_queries]{check_queries()}},
+\code{\link[=rd_event]{rd_event()}},
+\code{\link[=rd_query]{rd_query()}}
+}
+\concept{query functions}

@@ -16,6 +16,10 @@ test_that("rd_event finds missing events in covican", {
   q <- res$queries
   # all queries should correspond to missing follow-up
   expect_true(all(q$Event == "follow_up_visit_da_arm_1"))
+  # (its label, in EventLabel and Description; the text of the query has the unique name, which isn't renamed)
+  expect_true(all(q$EventLabel == "Follow up visit day 14+/-5d"))
+  expect_true(all(q$Description == "Follow up visit day 14+/-5d"))
+  expect_true(all(q$Query == "The event 'follow_up_visit_da_arm_1' is missing."))
 })
 
 test_that("filter argument works and returns messages for empty filters in covican", {
@@ -48,7 +52,34 @@ test_that("link generation works when link info provided in covican", {
   )
 })
 
-test_that("addTo merging works when addTo is provided as list(queries=...) in covican", {
+test_that("rd_event appends the output of a previous rd_query() or rd_event() with add_to", {
+  q <- suppressWarnings(rd_query(covican, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+  ev <- rd_event(covican, event = "follow_up_visit_da_arm_1")
+  out <- rd_event(covican, event = "follow_up_visit_da_arm_1", add_to = q)
+
+  expect_equal(nrow(out$queries), nrow(q$queries) + nrow(ev$queries))
+  expect_error(rd_event(covican, event = "follow_up_visit_da_arm_1", add_to = data.frame(a = 1)), class = "REDCapDM_error_argument")
+})
+
+test_that("addTo still works, with a deprecation warning", {
+  rlang::local_options(lifecycle_verbosity = "warning")
+  q <- suppressWarnings(rd_query(covican, variables = "copd", expression = "is.na(x)", event = "baseline_visit_arm_1"))
+
+  expect_warning(
+    old <- rd_query(covican, variables = "age", expression = "is.na(x)", event = "baseline_visit_arm_1", addTo = q),
+    class = "lifecycle_warning_deprecated"
+  )
+  new <- rd_query(covican, variables = "age", expression = "is.na(x)", event = "baseline_visit_arm_1", add_to = q)
+  expect_equal(old, new)
+
+  expect_warning(
+    old <- rd_event(covican, event = "follow_up_visit_da_arm_1", addTo = q),
+    class = "lifecycle_warning_deprecated"
+  )
+  expect_equal(old, rd_event(covican, event = "follow_up_visit_da_arm_1", add_to = q))
+})
+
+test_that("add_to merging works when add_to is provided as list(queries=...) in covican", {
   d0 <- covican$data
   exported <- d0[d0$record_id %in% c("100-6", "100-13"), ]  # restrict to a few rows
 
@@ -77,7 +108,7 @@ test_that("addTo merging works when addTo is provided as list(queries=...) in co
     data = exported,
     dic = covican$dictionary,
     event = "follow_up_visit_da_arm_1",
-    addTo = list(queries = prev)
+    add_to = list(queries = prev)
   )
 
   expect_true("queries" %in% names(res2))
@@ -94,5 +125,176 @@ test_that("report_zeros toggles presence of zero lines in covican", {
       dic = covican$dictionary,
       event = c("baseline_visit_arm_1", "some_missing_event")
     )
+  )
+})
+
+# ---- Fixes ----
+
+make_event_data <- function() {
+  data.frame(
+    record_id = c("1", "2", "3", "3"),
+    redcap_event_name = c("baseline_arm_1", "baseline_arm_1", "baseline_arm_1", "follow_up_arm_1"),
+    redcap_event_name.factor = factor(c("Baseline", "Baseline", "Baseline", "Follow-up")),
+    redcap_data_access_group = c("A", "B", "A", "A"),
+    stringsAsFactors = FALSE
+  )
+}
+
+test_that("rd_event reports the DAG of each record", {
+  res <- rd_event(data = make_event_data(), dic = data.frame(), event = "follow_up_arm_1")
+
+  expect_equal(res$queries$Identifier, c(1, 2))
+  expect_equal(res$queries$DAG, c("A", "B"))
+})
+
+test_that("rd_event works without the factor version of the event name", {
+  data <- make_event_data()
+  data$redcap_event_name.factor <- NULL
+
+  res <- rd_event(data = data, dic = data.frame(), event = "follow_up_arm_1")
+  expect_equal(nrow(res$queries), 2)
+})
+
+test_that("rd_event works when record_id is not the first column", {
+  data <- make_event_data()[, c("redcap_event_name", "record_id", "redcap_data_access_group")]
+
+  res <- rd_event(data = data, dic = data.frame(), event = "follow_up_arm_1")
+  expect_equal(res$queries$Identifier, c(1, 2))
+})
+
+test_that("rd_event keeps alphanumeric identifiers and sorts them naturally", {
+  data <- make_event_data()
+  data$record_id <- c("ABC10", "ABC2", "ABC3", "ABC3")
+
+  res <- rd_event(data = data, dic = data.frame(), event = "follow_up_arm_1")
+  expect_equal(res$queries$Identifier, c("ABC2", "ABC10"))
+})
+
+test_that("rd_event explains that it needs a longitudinal project", {
+  base <- covican$data[covican$data$redcap_event_name == "baseline_visit_arm_1", ]
+  base <- base[, !names(base) %in% c("redcap_event_name", "redcap_event_name.factor")]
+
+  expect_error(
+    rd_event(data = base, dic = covican$dictionary, event = "baseline_visit_arm_1"),
+    "rd_event\\(\\) needs a longitudinal project"
+  )
+})
+
+
+test_that("rd_event only expects the event in the records of its arm", {
+  data <- data.frame(
+    record_id = c("1", "1", "2", "2", "3", "4"),
+    redcap_event_name = c("screen_arm_1", "visit_arm_1", "screen_arm_1", "end_arm_1", "screen_arm_2", "screen_arm_1"),
+    stringsAsFactors = FALSE
+  )
+  event_form <- data.frame(arm_num = c(1, 1, 1, 2), unique_event_name = c("screen_arm_1", "visit_arm_1", "end_arm_1", "screen_arm_2"),
+                           form = "f1", stringsAsFactors = FALSE)
+
+  res <- rd_event(data = data, dic = data.frame(), event_form = event_form, event = "visit_arm_1")
+  # records 2 and 4 are in arm 1 and have no visit; record 3 is in arm 2
+  expect_equal(sort(as.character(res$queries$Identifier)), c("2", "4"))
+
+  # without event_form, the arm is taken from the name of the event
+  res <- rd_event(data = data, dic = data.frame(), event = "visit_arm_1")
+  expect_equal(sort(as.character(res$queries$Identifier)), c("2", "4"))
+})
+
+
+test_that("rd_event accepts event labels and asks for the event when it is missing", {
+  fx <- make_cross_event()
+
+  by_label <- rd_event(fx, event = "Follow-up")
+  by_name <- rd_event(fx, event = "follow_up_arm_1")
+  expect_equal(by_label$queries, by_name$queries)
+
+  expect_error(rd_event(fx), "Specify the event")
+
+  # A label shared by events of different arms is ambiguous
+  data <- data.frame(record_id = c("1", "2"), redcap_event_name = c("visit_arm_1", "visit_arm_2"), stringsAsFactors = FALSE)
+  data$redcap_event_name.factor <- factor(c("Visit", "Visit"))
+  expect_error(rd_event(data = data, dic = data.frame(), event = "Visit"), "shared by several events")
+})
+
+test_that("rd_event checks the events of the project that have no records yet", {
+  cov <- covican
+  ef <- cov$event_form
+  new_event <- ef[ef$unique_event_name == "follow_up_visit_da_arm_1", ]
+  new_event$unique_event_name <- "month_12_arm_1"
+  cov$event_form <- rbind(ef, new_event)
+
+  # A new event without records: all the records of its arm are missing it
+  res <- suppressMessages(rd_event(cov, event = "month_12_arm_1"))
+  expect_equal(nrow(res$queries), length(unique(cov$data$record_id)))
+  expect_true(all(res$queries$Query == "The event 'month_12_arm_1' is missing."))
+  both <- suppressMessages(rd_event(cov, event = c("follow_up_visit_da_arm_1", "month_12_arm_1")))
+  expect_equal(nrow(both$queries), nrow(res$queries) + nrow(suppressMessages(rd_event(covican, event = "follow_up_visit_da_arm_1"))$queries))
+
+  # An arm without records: no record is missing its events
+  arm_2 <- new_event
+  arm_2$unique_event_name <- "baseline_arm_2"
+  if ("arm_num" %in% names(arm_2)) arm_2$arm_num <- 2
+  cov$event_form <- rbind(ef, arm_2)
+  expect_equal(nrow(suppressMessages(rd_event(cov, event = "baseline_arm_2"))$queries), 0)
+
+  # An event that is not in the project is still an error
+  expect_error(rd_event(cov, event = "unknown_arm_1"), class = "REDCapDM_error_argument")
+})
+
+test_that("rd_event stops when any of the events doesn't exist", {
+  expect_error(rd_event(covican, event = c("baseline_visit_arm_1", "unknown_arm_1")), class = "REDCapDM_error_argument")
+  expect_error(rd_event(covican, event = "unknown_arm_1"), class = "REDCapDM_error_argument")
+})
+
+test_that("rd_event works with fields called like its objects (e.g. `data` or `event`)", {
+  ev <- function(p) suppressMessages(rd_event(p, event = "follow_up_visit_da_arm_1"))$queries
+  ref <- ev(covican)
+  expect_gt(nrow(ref), 0)
+  for (name in c("data", "event", "ids", "k")) expect_equal(ev(add_covican_field(name)), ref)
+})
+
+test_that("rd_event filters by the type of the variables only with the columns of the project", {
+  cv <- covican
+  cv$data <- cv$data[, c("record_id", "redcap_event_name", "redcap_event_name.factor", "age", "copd", "dm", "potassium")]
+  by_type <- suppressWarnings(suppressMessages(rd_event(cv, event = "follow_up_visit_da_arm_1", filter = "if_all(where(is.numeric), ~ is.na(.x) | .x < 300)")))
+  by_name <- suppressWarnings(suppressMessages(rd_event(cv, event = "follow_up_visit_da_arm_1", filter = "if_all(c(age, copd, dm, potassium), ~ is.na(.x) | .x < 300)")))
+  expect_equal(by_type$queries$Identifier, by_name$queries$Identifier)
+})
+
+
+# ---- Identifier with another name ----
+
+test_that("rd_event filters by an identifier with another name and takes it from the dictionary", {
+  project <- make_custom_id()
+  expect_equal(rd_event(project, event = "visit_arm_1", filter = "subject_id %in% c('002', '003')")$queries$Identifier, "002")
+  expect_equal(nrow(rd_event(project, event = "visit_arm_1", filter = "subject_id == '003'")$queries), 0)
+
+  subject_id <- "999"
+  expect_equal(rd_event(project, event = "visit_arm_1", filter = "subject_id == '002'")$queries$Identifier, "002")
+
+  expect_equal(rd_event(make_custom_id(age_first = TRUE), event = "visit_arm_1")$queries$Identifier, "002")
+  expect_equal(rd_event(make_custom_id(external_first = TRUE), event = "visit_arm_1")$queries$Identifier, "002")
+})
+
+test_that("rd_event takes one message for all the events or one message for each event in query_name", {
+  d0 <- covican$data
+  events <- c("baseline_visit_arm_1", "follow_up_visit_da_arm_1")
+  # (a record without its baseline visit and another without its follow-up visit)
+  exported <- d0[!(d0$record_id == "100-6" & d0$redcap_event_name == events[1]) & !(d0$record_id == "100-13" & d0$redcap_event_name == events[2]), ]
+  run <- function(query_name) suppressMessages(rd_event(data = exported, dic = covican$dictionary, event = events, query_name = query_name))$queries
+
+  expect_true(all(run("Missing visit")$Query == "Missing visit"))
+  q <- run(c("No baseline", "No follow-up"))
+  expect_equal(unique(q$Query[q$Event == "baseline_visit_arm_1"]), "No baseline")
+  expect_equal(unique(q$Query[q$Event == "follow_up_visit_da_arm_1"]), "No follow-up")
+  # An NA message: the default message of its event
+  q <- run(c("No baseline", NA))
+  expect_equal(unique(q$Query[q$Event == "follow_up_visit_da_arm_1"]), "The event 'follow_up_visit_da_arm_1' is missing.")
+  expect_false(anyNA(q$Query))
+
+  # Another number of messages: an error (it gave queries without text)
+  expect_error(run(c("a", "b", "c")), "one message for each event", class = "REDCapDM_error_argument")
+  expect_error(
+    suppressMessages(rd_event(data = exported, dic = covican$dictionary, event = events[1], query_name = c("a", "b"))),
+    "one message for each event", class = "REDCapDM_error_argument"
   )
 })

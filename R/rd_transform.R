@@ -3,14 +3,14 @@
 #' @description
 #' `r lifecycle::badge('stable')`
 #'
-#' Transforms the raw REDCap data read by the `redcap_data` function. The function runs in one-step pipeline all functions dedicated to processing the data and returns the transformed data and dictionary, along with a summary of each step done.
+#' Transforms the raw REDCap data read by the `redcap_data` function. The function runs in one-step pipeline the functions dedicated to processing the data (`rd_delete_vars()`, `rd_dates()`, `rd_recalculate()`, `rd_checkbox()`, `rd_factor()`, `rd_dictionary()` and, with `final_format`, `rd_split()`) and returns the transformed data and dictionary, along with a summary of each step done. `rd_insert_na()` is not part of it: its filters are specific to each project, so apply it separately.
 #'
 #' @param project A list containing the REDCap data, dictionary, and event mapping (expected `redcap_data()` output). Overrides `data`, `dic`, and `event_form`.
 #' @param data A `data.frame` or `tibble` with the REDCap dataset.
 #' @param dic A `data.frame` with the REDCap dictionary.
 #' @param event_form Only applicable for longitudinal projects (presence of events). Event-to-form mapping for longitudinal projects.
 #' @param checkbox_labels Character vector of length 2 for labels of unchecked/checked values. Default: `c("No", "Yes")`.
-#' @param na_logic Controls how missing values are set based on the branching logic of a checkbox. Must be one of `"none"` (do nothing), `"missing"` (set to `NA` only when the logic evaluation is `NA`), or `"eval"` (set to `NA` when the logic evaluates to `FALSE`). Defaults to `"none"`.
+#' @param na_logic Controls how missing values are set based on the branching logic of a checkbox. Must be one of `"none"` (do nothing), `"missing"` (set to `NA` only when the logic evaluation is `NA`), or `"eval"` (set to `NA` when the logic evaluates to `FALSE` or `NA`). Defaults to `"none"`.
 #' @param exclude_recalc Optional. Character vector of field names to exclude from recalculation.
 #' @param exclude_factor Optional character vector of variable names (use original names **without** the `.factor` suffix) to exclude from conversion.
 #' @param delete_vars Optional. A character vector of variable names to remove from both the dataset and dictionary.
@@ -18,11 +18,11 @@
 #' @param final_format Character string indicating the final format of the data. Options are `raw`, `by_event` or `by_form`. `raw` (default) returns the transformed data in its original structure, `by_event` returns it as a nested data frame by event, and `by_form` returns it as a nested data frame by form.
 #' @param which_event Character. If `final_format = "by_event"`, return only this event.
 #' @param which_form Character. If `final_format = "by_form"`, return only this form.
-#' @param wide Logical. If `TRUE` (for form-based splits), repeated instances are returned in wide format. Defaults to `FALSE`.
+#' @param wide Logical. If `TRUE` (for form-based splits), repeated instances are returned in wide format. Default `NULL`, which is `FALSE` when the data is split by form.
 #'
 #' @return A list with elements:
 #' \describe{
-#'   \item{data}{Transformed data (data.frame or nested list when split).}
+#'   \item{data}{Transformed data. With `final_format = "by_event"` or `"by_form"`, as in `rd_split()`: a tibble with one row per event or form and its dataset in the list-column `df` (e.g. `trans$data$df[[1]]`), or the `data.frame` of the event or form chosen with `which_event` or `which_form`.}
 #'   \item{dictionary}{Updated dictionary data.frame.}
 #'   \item{event_form}{Event–form mapping (if applicable).}
 #'   \item{results}{Character summary of transformation steps performed.}
@@ -42,6 +42,7 @@
 #'                       which_form = "laboratory_findings",
 #'                       wide = TRUE)
 #'
+#' @family process functions
 #' @export
 
 rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = NULL, checkbox_labels = c("No", "Yes"), na_logic = "none", exclude_recalc = NULL, exclude_factor = NULL, delete_vars = NULL, delete_pattern = NULL, final_format = "raw", which_event = NULL, which_form = NULL, wide = NULL) {
@@ -50,7 +51,7 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
   ind <- 1
 
   # validate na_logic against allowed choices
-  na_logic <- match.arg(na_logic, choices = c("none", "missing", "eval"))
+  na_logic <- check_choice(na_logic, "na_logic", c("none", "missing", "eval"), partial = TRUE)
 
   # Handle potential overwriting when both `project` and other arguments are provided
   if (!is.null(project)) {
@@ -60,48 +61,81 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
   }
 
   # Ensure both `data` and `dic` are provided; stop if either is missing
-  if (is.null(data) | is.null(dic)) {
-    stop("Both `data` and `dic` (data and dictionary) arguments must be provided.")
+  if (is.null(data) || is.null(dic)) {
+    rd_abort("Both {.arg data} and {.arg dic} (data and dictionary) arguments must be provided.")
+  }
+  
+  # Error: invalid arguments
+  check_inputs(data, dic, dic_cols = c("field_name", "form_name", "field_type", "choices_calculations_or_slider_labels", "branching_logic_show_field_only_if", "field_label", "text_validation_type_or_show_slider_number"))
+  check_event_form(event_form)
+  data <- plain_data(data)
+  dic <- plain_dic(dic)
+  if (!is.character(final_format) || length(final_format) != 1 || !final_format %in% c("raw", "by_event", "by_form")) {
+    rd_abort("{.arg final_format} has to be one of the following: {.val raw}, {.val by_event}, {.val by_form}.", class = "REDCapDM_error_argument")
+  }
+  for (arg in c("exclude_recalc", "exclude_factor", "delete_vars", "delete_pattern")) {
+    check_strings(get(arg), arg)
+  }
+  for (arg in c("which_event", "which_form")) {
+    check_string(get(arg), arg, null_ok = TRUE)
+  }
+  if (!is.null(wide)) {
+    check_flag(wide, "wide")
+  }
+  # (as in rd_checkbox(): the description of the results uses the labels)
+  if (length(checkbox_labels) != 2) {
+    rd_abort("{.arg checkbox_labels} must have two labels: the first for unchecked and the second for checked (e.g. c(\"No\", \"Yes\")).")
   }
 
-
-  # Check if the project is longitudinal (has more than one event) or not:
+  # Check if the project is longitudinal (the data has events) or not:
   longitudinal <- ifelse("redcap_event_name" %in% names(data), TRUE, FALSE)
 
-  if (final_format == "by_event" & is.null(event_form)) {
-    stop("To split the data by event the event_form has to be provided", call. = FALSE)
+  if (final_format == "by_event" && is.null(event_form)) {
+    rd_abort("To split the data by event, {.arg event_form} has to be provided.")
   }
 
   # If the project is not longitudinal 'by_form' can be used without event_form:
-  if (final_format == "by_form" & is.null(event_form) & longitudinal) {
-    stop("To split the data by form the event_form has to be provided in a longitudinal project", call. = FALSE)
+  if (final_format == "by_form" && is.null(event_form) && longitudinal) {
+    rd_abort("To split the data by form in a longitudinal project, {.arg event_form} has to be provided.")
   }
 
-  if (!is.null(which_event) & final_format != "by_event") {
-    stop("Which event has been specified but the final format is not to split the data by event", call. = FALSE)
+  if (!is.null(which_event) && final_format != "by_event") {
+    rd_abort("{.arg which_event} has been specified, but the final format doesn't split the data by event: use {.code final_format = \"by_event\"}.")
   }
 
-  if (!is.null(which_form) & final_format != "by_form") {
-    stop("Which form has been specified but the final format is not to split the data by form", call. = FALSE)
+  if (!is.null(which_form) && final_format != "by_form") {
+    rd_abort("{.arg which_form} has been specified, but the final format doesn't split the data by form: use {.code final_format = \"by_form\"}.")
   }
 
-  if (!is.null(wide) & final_format != "by_form") {
-    stop("The argument wide has been specified but the final format is not to split the data by form", call. = FALSE)
+  if (isTRUE(wide) && final_format != "by_form") {
+    rd_abort("{.arg wide} has been specified, but the final format doesn't split the data by form: use {.code final_format = \"by_form\"}.")
+  }
+  
+  # Error: the form status and survey timestamp fields must be removed to split the data by event or form
+  if (final_format %in% c("by_event", "by_form")) {
+    kept <- setdiff(names(data), delete_vars)
+    if (!is.null(delete_pattern)) {
+      kept <- kept[!grepl(paste(delete_pattern, collapse = "|"), kept, ignore.case = TRUE)]
+    }
+    status_fields <- c("_complete", "_timestamp")[c(any(grepl("_complete$", kept)), any(grepl("_timestamp$", kept)))]
+
+    if (length(status_fields) > 0) {
+      split_by <- sub("by_", "", final_format)
+      pattern_code <- paste0("delete_pattern = ", if (length(status_fields) > 1) "c(\"_complete\", \"_timestamp\")" else paste0("\"", status_fields, "\""))
+      rd_abort("To split the data by {split_by}, remove the REDCap status fields with {.code {pattern_code}}.", class = "REDCapDM_error_argument")
+    }
   }
 
   if (!final_format %in% c("raw", "by_event", "by_form")) {
-    stop("final_format argument has to be one of the following: 'raw', 'by_event', 'by_form'", call. = FALSE)
+    rd_abort("{.arg final_format} has to be one of the following: {.val raw}, {.val by_event}, {.val by_form}.", class = "REDCapDM_error_argument")
   }
 
   # If the project is longitudinal and the event hasn't been specified:
-  if (longitudinal & is.null(event_form)) {
-    warning("The project contains more than one event. For a complete transformation is recommended to include the event-form correspondence.")
+  if (longitudinal && is.null(event_form)) {
+    rd_warn("The project is longitudinal (the data has the column `redcap_event_name`). For a complete transformation it is recommended to include the event-form correspondence.")
   }
 
-  # Check if the project has repeated instruments
-    repeat_instrument <- "redcap_repeat_instrument" %in% names(data) && any(!is.na(data$redcap_repeat_instrument))
-
-  message("\u23F3 Transformation in progress...")
+  rd_inform("\u23F3 Transformation in progress...")
 
   labels <- purrr::map_chr(data, function(x) {
     lab <- attr(x, "label")
@@ -111,13 +145,6 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
       ""
     }
   })
-
-  # Change the labelled class of each column but don't remove the label:
-  data <- data |>
-    dplyr::mutate_all(function(x) {
-      class(x) <- setdiff(class(x), "labelled")
-      x
-    })
 
   # Delete selected variables
   results <- c(results, stringr::str_glue("{ind}. Removing selected variables\n"))
@@ -143,15 +170,6 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
 
 
   # Change the format of dates
-  # Identify dates that have the tag "date_"/"datetime_"/"datetime_seconds_" in redcap. It will have always the format "Y-M-D" in any case
-  var_date <- dic |>
-    dplyr::filter(grepl("^date_", .data$text_validation_type_or_show_slider_number)) |>
-    dplyr::pull(.data$field_name)
-
-  var_datetime <- dic |>
-    dplyr::filter(grepl("^datetime_", .data$text_validation_type_or_show_slider_number)) |>
-    dplyr::pull(.data$field_name)
-
   data <- rd_dates(data = data, dic = dic)$data
 
   dic <- dic |>
@@ -160,37 +178,32 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
       TRUE ~ branching_logic_show_field_only_if
     ))
 
-  if (!repeat_instrument) {
-    # Recalculate calculated fields (previous to transforming factors and other preprocessing)
-    # It wil create duplicate variables of each calculated field with "_recalc" in the end and the recalculated value
+  # Recalculate calculated fields (previous to transforming factors and other preprocessing)
+  # It wil create duplicate variables of each calculated field with "_recalc" in the end and the recalculated value
 
-    results <- c(results, stringr::str_glue("\n\n{ind}. Recalculating calculated fields and saving them as '[field_name]_recalc'"))
-    ind <- ind + 1
+  results <- c(results, stringr::str_glue("\n\n{ind}. Recalculating calculated fields and saving them as '[field_name]_recalc'"))
+  ind <- ind + 1
 
-    # If the project is longitudinal and the event hasn't been specified no recalculation is possible
-    if (longitudinal & is.null(event_form)) {
-      results <- c(results, "\nNo recalculation is possible as the project has more than one event and the event-form correspondence has not been specified\n")
-    } else {
-      recalc <- rd_recalculate(data = data, dic = dic, event_form = event_form, exclude = exclude_recalc)
+  # If the project is longitudinal and the event hasn't been specified no recalculation is possible
+  if (longitudinal && is.null(event_form)) {
+    results <- c(results, "\nNo recalculation is possible as the project is longitudinal and the event-form correspondence has not been specified\n")
+  } else {
+    recalc <- rd_recalculate(data = data, dic = dic, event_form = event_form, exclude = exclude_recalc)
 
-      data <- recalc$data
-      dic <- recalc$dictionary
+    data <- recalc$data
+    dic <- recalc$dictionary
 
-      results <- c(results, recalc$results[-1])
-    }
+    results <- c(results, recalc$results[-1])
   }
 
-  if (!repeat_instrument) {
-    # Message depends on na_logic option
-    if (na_logic == "eval") {
-      results <- c(results, stringr::str_glue("\n\n{ind}. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options. For checkboxes that have a branching logic, when the logic isn't satisfied or it's missing their values will be set to missing"))
-    } else if (na_logic == "missing") {
-      results <- c(results, stringr::str_glue("\n\n{ind}. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options. For checkboxes that have a branching logic, when the logic is missing their values will be set to missing"))
-    } else {
-      results <- c(results, stringr::str_glue("\n\n{ind}. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options."))
-    }
+  # Message depends on na_logic option (and the labels of the checkboxes, which rd_transform() always renames)
+  checkbox_text <- checkbox_message(checkbox_labels, checkbox_names = TRUE)
+  if (na_logic == "eval") {
+    results <- c(results, stringr::str_glue("\n\n{ind}. {checkbox_text} For checkboxes that have a branching logic, when the logic isn't satisfied or it's missing their values will be set to missing"))
+  } else if (na_logic == "missing") {
+    results <- c(results, stringr::str_glue("\n\n{ind}. {checkbox_text} For checkboxes that have a branching logic, when the logic is missing their values will be set to missing"))
   } else {
-    results <- c(results, stringr::str_glue("\n\n{ind}. Transforming checkboxes: changing their values to No/Yes and changing their names to the names of its options."))
+    results <- c(results, stringr::str_glue("\n\n{ind}. {checkbox_text}"))
   }
 
   ind <- ind + 1
@@ -198,18 +211,16 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
   # If there is some checkbox:
   if (length(names(data)[grep("___", names(data))]) > 0) {
     # If the event_form is not provided and the project is longitudinal
-    if (is.null(event_form) & longitudinal) {
-      results <- c(results, "\nBranching logic evaluation is not possible as the project has more than one event and the event-form correspondence has not been specified\n")
+    if (is.null(event_form) && longitudinal) {
+      results <- c(results, "\nBranching logic evaluation is not possible as the project is longitudinal and the event-form correspondence has not been specified\n")
     } else {
-      if (!repeat_instrument) {
-        # Transform missings of checkboxes with branching logic:
-        trans <- rd_checkbox(data = data, dic = dic, event_form = event_form, checkbox_labels = checkbox_labels, checkbox_names = TRUE, na_logic = na_logic)
+      # Transform missings of checkboxes with branching logic:
+      trans <- rd_checkbox(data = data, dic = dic, event_form = event_form, checkbox_labels = checkbox_labels, checkbox_names = TRUE, na_logic = na_logic)
 
-        results <- c(results, trans$results[-1])
+      results <- c(results, trans$results[-1])
 
-        data <- trans$data
-        dic <- trans$dictionary
-      }
+      data <- trans$data
+      dic <- trans$dictionary
     }
   } else {
     results <- c(results, "\nNo checkboxes are found in the data\n")
@@ -240,27 +251,26 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
       x
     })
 
-  if (!repeat_instrument) {
-    # Transform the branching logic from the dictionary which is in REDCap logic (raw) into R logic
-    results <- c(results, stringr::str_glue("\n\n{ind}. Converting every branching logic in the dictionary into R logic"))
-    ind <- ind + 1
+  # Transform the branching logic from the dictionary which is in REDCap logic (raw) into R logic
+  results <- c(results, stringr::str_glue("\n\n{ind}. Converting every branching logic in the dictionary into R logic"))
+  ind <- ind + 1
 
-    dic_trans <- rd_dictionary(data = data, dic = dic, event_form = event_form)
+  dic_trans <- rd_dictionary(data = data, dic = dic, event_form = event_form)
 
-    dic <- dic_trans$dictionary
+  dic <- dic_trans$dictionary
 
-    results <- c(results, dic_trans$results[-1])
-  }
+  results <- c(results, dic_trans$results[-1])
 
 
   # Arrange our dataset by record_id and event (will keep the same order of events as in redcap)
   if (longitudinal) {
+    id_order <- id_field(data, dic)
     if ("redcap_event_name.factor" %in% names(data)) {
       data <- data |>
-        dplyr::arrange(factor(.data$record_id, levels = unique(.data$record_id)), .data$redcap_event_name.factor)
+        dplyr::arrange(factor(.data[[id_order]], levels = unique(.data[[id_order]])), .data$redcap_event_name.factor)
     } else {
       data <- data |>
-        dplyr::arrange(factor(.data$record_id, levels = unique(.data$record_id)), .data$redcap_event_name)
+        dplyr::arrange(factor(.data[[id_order]], levels = unique(.data[[id_order]])), .data$redcap_event_name)
     }
   }
 
@@ -270,9 +280,11 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
 
 
   # If an event_form is specified or if the project has only one event and by_form has been specified
-  if (!is.null(event_form) | (final_format == "by_form" & !longitudinal)) {
+  if (!is.null(event_form) || (final_format == "by_form" && !longitudinal)) {
     if (!is.null(event_form)) {
-      var_noevent <- dic$field_name[!dic$form_name %in% event_form$form]
+      # (the record identifier, record_id or else the first field of the dictionary (see id_field()), is always kept: every row needs it)
+      id_var <- id_field(data, dic)
+      var_noevent <- setdiff(dic$field_name[!dic$form_name %in% event_form$form], id_var)
 
       if (length(var_noevent) > 0) {
         results <- c(results, stringr::str_glue("\n\n{ind}. Erasing variables from forms that are not linked to any event"))
@@ -286,10 +298,10 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
       }
     }
 
-    # Final arrangment
+    # Final arrangement
 
     if (final_format == "by_event") {
-      results <- c(results, stringr::str_glue("\n\n{ind}. Final arrangment of the data by event"))
+      results <- c(results, stringr::str_glue("\n\n{ind}. Final arrangement of the data by event"))
       ind <- ind + 1
 
       if (is.null(which_event)) {
@@ -302,7 +314,7 @@ rd_transform <- function(project = NULL, data = NULL, dic = NULL, event_form = N
         data <- split$data
       }
     } else if (final_format == "by_form") {
-      results <- c(results, stringr::str_glue("{ind}. Final arrangment of the data by form"))
+      results <- c(results, stringr::str_glue("\n\n{ind}. Final arrangement of the data by form"))
       ind <- ind + 1
 
       if (is.null(wide)) {

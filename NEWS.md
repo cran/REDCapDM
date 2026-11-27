@@ -1,3 +1,73 @@
+# REDCapDM 1.1.0
+
+## Breaking changes
+
+- `library(REDCapDM)` no longer attaches other packages (dplyr, purrr, stringr, labelled, ...): load the packages you use in your own code, e.g. `library(dplyr)`.
+- REDCapR and openxlsx are now suggested packages: they are only needed to read from the REDCap API or from `.xlsx` files and to export queries with `rd_export()`, which ask to install them when they are missing.
+- REDCapDM now requires dplyr 1.1.0 or later, and reading from the REDCap API requires REDCapR 1.2.0 or later (older versions only return the events of the first arm).
+- The reports of `rd_query()` and `rd_event()` have the unique event name (e.g. `enrollment_arm_1`) in `Event` and its label in a new `EventLabel` column. `Event` had the label, so events with the same label (e.g. the same visit in several arms) were merged, and renaming an event in REDCap solved its queries. `check_queries()` also accepts the reports created with previous versions.
+- The `addTo` argument of `rd_query()` and `rd_event()` is now called `add_to`. `addTo` still works, with a deprecation warning.
+- The `filter` of `rd_insert_na()` must name the columns it uses (e.g. `age > 30`, `data$age` or `data[, "age"]`), so that their events can be checked: a filter whose columns can't be determined (e.g. `dplyr::pull(data, "age")` or `get("age")`) stops with an error.
+
+## New features
+
+- New `rd_missplot()` function to visualise the missing data per variable (barplot), per event and variable (heatmap in longitudinal projects) or record by record (`by = "record"`). First version by Ferran Perez Sanchez (#19).
+- Repeated instruments and repeating events are supported: `rd_query()`, `rd_missplot()` and `rd_rlogic()` only use each variable in the rows where it is collected, the `Repetition` column and the links of the queries point to the right instance, `check_queries()` matches the queries by event and repetition, and `rd_rlogic()` evaluates the logic in each instance, as REDCap, also with `[current-instance]`. As a result, `rd_recalculate()`, `rd_checkbox()`, `rd_dictionary()` and `rd_transform()` also work in these projects.
+- New `rm_mdc` and `mdc` arguments in `redcap_data()` to remove the Missing Data Codes of REDCap and of the project (`rm_mdc = TRUE`, the default), or to keep them (`rm_mdc = FALSE`) in a new `<field>_mdc` column next to each field, so that the field keeps its type. With the API, the codes of the project are read automatically.
+- `rd_rlogic()` (and so `rd_recalculate()`, `rd_query()` and `rd_dictionary()`) translates many more REDCap functions: `isblankormissingcode()`, `contains()`, `not_contain()`, `starts_with()`, `ends_with()`, `left()`, `right()`, `mid()`, `find()`, `replace_text()`, `length()`, `concat()`, `concat_ws()`, `upper()`, `lower()`, `trim()`, `mean()`, `median()`, `stdev()`, `roundup()`, `mod()`, `exponential()`, `isnumber()`, `isinteger()`, `month()` and `day()`, and `datediff()` with `"now"`, dates with time and time fields. It also translates the same variable in different events (e.g. `[visit_2_arm_1][weight] - [visit_1_arm_1][weight]`).
+- `rd_rlogic()` returns `eval_data`, the evaluation next to the record identifier, event and repetition of each row.
+- `rd_query()`, `rd_event()` and `check_queries()` return a report of class `REDCapDM_report`: printed in the console, it shows the number of queries per variable and event (per state in `check_queries()`). `$queries`, `$results`, `add_to` and `rd_export()` work as before.
+- New `forms` argument in `rd_delete_vars()` to remove every variable of a form.
+- `rd_recalculate()` reports the number of different values of each calculated field, `rd_insert_na()` also updates the `.factor` version of the variables, and `rd_checkbox()` returns a project without checkboxes unchanged, with a warning.
+- The functions take the record identifier from the dictionary (its first field) when it isn't called `record_id`, whatever its position in the data.
+- `filter` and `expression` can use objects created inside a function or a loop, and they are no longer run with `eval(parse())`.
+
+## Bug fixes
+
+- `redcap_data()` keeps the text of the values that look like numbers or missing values, with the API and with the exported files: text fields (e.g. `"0034"`, `"1.50"` or `"+34600111222"`), the text `"NA"`, the codes of options written as `01` or `1.0`, `redcap_survey_identifier`, and record identifiers with leading zeros or too long to be numbers.
+- `redcap_data()` with the API gives each row the labels of its event, repeated instrument and data access group, and each field its label, by their codes and names: they were joined by position, so a change of the project while it was read could move them to other rows or fields. Text fields and the record identifier keep their labels, and yes/no, true/false and status fields get their `.factor` version.
+- `redcap_data()` with the exported files doesn't run the `library(Hmisc)` and `graphics.off()` lines of the R script of REDCap, reads the projects that repeat events but not instruments, keeps the spaces of the labels with line breaks and accepts the paths between quotes copied by Windows.
+- `redcap_data()` only removes the HTML tags of the labels (the texts such as `<18` and `&` are kept), and gives the same dictionary from the API and from the exported files (empty texts in the empty cells, without spaces at the start or the end).
+- `rd_rlogic()` translates the REDCap logic as REDCap evaluates it: `!=`, `AND` and `OR` in capitals or across lines, negative numbers (e.g. `[a]<-3` or `[a] < '-3'`), texts between quotes that look like operators or functions (e.g. `[x] = 'a=b'`), blank values (different from any value with `<>`), `if()` with a condition without variables, functions written with spaces before their parenthesis, and fields whose names aren't valid in R (e.g. `if`).
+- `rd_rlogic()` evaluates `datediff()` as REDCap: it failed, and now gives the absolute difference unless the last argument is `true`, with any date format, `"M"` for months and `"m"` for minutes, `"today"`, and years and months of 365.2425 and 30.44 days.
+- `rd_rlogic()`: `min()` and `max()` are computed row by row (they gave one value for the whole data), `sum()` ignores blank values, `rounddown()` works and rounds down, and the dates chosen by `if()`, `min()` or `max()` stay dates.
+- `rd_rlogic()` takes the value of `[event][field]` from the record of each row, also when the identifier isn't called `record_id`, without overwriting other fields, and works with variables already converted into factors with `rd_factor()`.
+- `rd_query()` applies the branching logic that uses variables of other events, of checkbox options (e.g. `variables = "symptoms___1"`), written in R (also with `[[` or comments) or without fields (e.g. `1 = 1`), and checks each variable only in its own events.
+- `rd_query()` keeps the texts of the expression and the values in the messages of the queries, and the characters `<`, `>` and `&` of the labels, describes `<=` and `>=` as "less than or equal to" and "greater than or equal to", and keeps apart in `results` the variables whose long names begin in the same way.
+- `rd_query()` works with `report_zeros = TRUE` when every variable has queries, with several data access groups when a variable has no queries, with events without records, and with `by_dag = TRUE` keeps the records without a data access group. It checks `link$event_id` and accepts events given by their label.
+- `rd_query()`, `rd_event()` and `check_queries()` keep the record identifiers as text when they aren't plain numbers (e.g. `"007"` was `7`, and alphanumeric identifiers were `NA`), write them without scientific notation (e.g. `1e+05-1`) and sort them naturally.
+- `rd_event()` gives each query the data access group of its record, only reports the records of the arm of the event, works with event labels, without `redcap_event_name.factor`, with `add_to` and with events without records, and takes in `query_name` one message for all the events or one per event.
+- `check_queries()` marks as `Miscorrected` only the new queries of a field that had a query in the old report, keeps one pending query when only its link changed, tells apart queries of different fields with the same description and texts with carriage returns, reads the same text in different encodings as the same query, and works when neither report has queries.
+- `rd_checkbox()` gives each option a valid and unique name, keeps the logic that uses the options with the codes 0 and 1 (also as numbers, e.g. `[cb(1)] + [cb(2)] >= 2`), translates the options with letters or negative codes, and works with tibbles, with options written as labels and with branching logic that can't be evaluated (the options are left unchanged, with a warning). It stops when the checkboxes were already transformed.
+- `rd_dictionary()` and `rd_transform()` keep the labels with quotes valid in the logic, read the options written without a space after the comma, translate the codes of yes/no and true/false fields, and keep in REDCap syntax the logic that uses factors as numbers or variables of other events.
+- `rd_recalculate()` leaves blank the calculations without a numeric result (e.g. a division by zero), compares the values as numbers (also with labels), updates the `_recalc` fields that it added before instead of duplicating them, and never overwrites a field of the project called `_recalc`.
+- `rd_split()` keeps the record identifier (also with another name) and the fields called `id`, gives one row per record with `wide = TRUE`, chooses the rows of each repeating instrument by its code, keeps the rows of the forms that only repeat in some events and ignores the descriptive fields.
+- `rd_dates()` sets to `NA`, with a warning, the values that aren't dates (they stopped the function or turned the next dates into `NA`), keeps the seconds of the datetimes, and works when the data doesn't have every date field.
+- `rd_delete_vars()` never removes the record identifier, removes the variables of `pattern` from the dictionary without distinguishing upper and lower case, removes a checkbox from the dictionary when all its options are removed and accepts a variable with its `.factor` version in `vars`.
+- `rd_factor()` keeps the codes of a field whose labels are of several codes, converts the `.factor` columns that are text, warns instead of stopping when `exclude` has every variable and removes the `.factor` columns without their variable, also of the REDCap columns.
+- `rd_insert_na()` checks the events of every column of the filter, also chosen with `data$x`, `data[["x"]]` or `data[, "x"]`, takes the record identifier as present in every event, accepts filters with functions and objects of the session, and works in non-longitudinal projects.
+- `rd_export()` stops when the folder doesn't exist or the sheet name isn't valid in Excel, writes the links of factor columns, keeps the format of dates when the cells are centered and accepts the data frame of queries.
+- `rd_transform()` works when the record identifier isn't called `record_id` (also when its form has no event) and with `wide = FALSE`.
+- All the functions work with grouped data (`dplyr::group_by()`), dictionaries with factor columns and fields with the name of an internal object (e.g. `data` or `event`). knitr and lubridate are now declared dependencies.
+
+## Clearer messages
+
+- Every function checks its arguments, and a wrong value stops with a message that names the argument and what it expects, instead of an internal R error.
+- Errors, warnings and messages use cli and have classes (`REDCapDM_error`, with `_argument`, `_data`, `_file`, `_api` and `_logic`, `REDCapDM_warning` and `REDCapDM_message`). The informative messages can be hidden with `options(REDCapDM.quiet = TRUE)`.
+- The messages name the variables, forms and events involved: e.g. the variables that don't exist, the fields of the dictionary that aren't in the data, how to remove missing instruments with `rd_delete_vars(forms = ...)`, or why a logic can't be translated (with the translated logic and the R error).
+- `redcap_data()` explains when a file is not found or can't be read (e.g. a dictionary not encoded in UTF-8), and warns when variables of the data aren't in the dictionary or the project has no records.
+
+## Documentation
+
+- The vignette is split into four: getting started (`vignette("REDCapDM")`), missing data (`vignette("missing-data")`), data processing (`vignette("data-processing")`) and queries (`vignette("query-management")`).
+- The reference of the website groups the functions by task, the help of each function links to the related ones, and the examples can be run as they are.
+- New contributing guide, code of conduct and issue templates on GitHub.
+- `rd_checkbox()`, `rd_dates()`, `rd_delete_vars()`, `rd_dictionary()`, `rd_export()`, `rd_factor()`, `rd_recalculate()` and `rd_split()` are now stable. `rd_missplot()` remains experimental.
+
+## Internal changes
+
+- Much larger test suite, with snapshot tests of the printed reports and the main messages, and code cleanup following lintr.
+
 # REDCapDM 1.0-1
 
 ## Bug fixes
@@ -77,7 +147,7 @@
 
 ## Changes
 
--   Update of the links leading to the Github page.
+-   Update of the links leading to the GitHub page.
 
 <br>
 <br>
@@ -152,7 +222,7 @@
 
 -   New error added to the *rd_query()* function when trying to use a variable that is not in the dataset.
 
--   New error added to the *rd_query()* function when the logic of the filter was using incorrected logic.
+-   New error added to the *rd_query()* function when the logic of the filter was using incorrect logic.
 
 -   The *rd_export()* function will now create a themed excel file.
 
@@ -253,7 +323,7 @@
 -   For all functions except *redcap_data()* we can now pass a list with the data, dictionary and event in the first argument of the function.
 -   *rd_transform()* will now take into account the different events that might be present in the variables of the logic for the recalculation of calculated fields and the evaluation of branching logics. This also applies for *rd_rlogic()*.
 -   As a consequence of this last improvement that applies in longitudinal REDCap projects (with more than one event) now we have to specify not only the data and dictionary but also the event-form mapping.
--   New *checkbox_na* argument in *rd_transform()* to specify if the values of the checkbox will be converted to missing not only when the branching logic is missing but also when it's not fullfilled (if *TRUE*).
+-   New *checkbox_na* argument in *rd_transform()* to specify if the values of the checkbox will be converted to missing not only when the branching logic is missing but also when it's not fulfilled (if *TRUE*).
 -   New *by_dag* argument in *rd_query()* to filter the output by each Data Access Group (DAG).
 -   Summary of the generated queries ( *\$results* ) will now include the event and the type of query and will be displayed in the RStudio viewer tab.
 
